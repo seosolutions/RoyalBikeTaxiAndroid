@@ -19,6 +19,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.TextView;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -29,8 +30,11 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+
+import org.w3c.dom.Text;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback,
@@ -40,6 +44,8 @@ public class MainActivity extends AppCompatActivity
     private GoogleMap mMap;
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
+    public Location myLocation;
+    public TextView locaitonText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,6 +53,8 @@ public class MainActivity extends AppCompatActivity
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+
+        locaitonText = (TextView) findViewById(R.id.locationText);
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
@@ -75,6 +83,7 @@ public class MainActivity extends AppCompatActivity
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
+
     }
 
     @Override
@@ -150,18 +159,20 @@ public class MainActivity extends AppCompatActivity
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
-        // Add a marker in Sydney and move the camera
-        LatLng sydney = new LatLng(-34, 151);
-        mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));
+        // Move the camera to Savannah
+        LatLng savannah = new LatLng(32.072219, -81.0933537);
+        CameraPosition cp = new CameraPosition(savannah, 14.9f, 0, 17.5f);
+        mMap.moveCamera(CameraUpdateFactory.newCameraPosition(cp));
     }
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
         mLocationRequest = LocationRequest.create();
         //TODO: look into HIGH ACCURACY vs BATTER and DATA saver
+        // Consider, to safe driver data and battery, letting him choose the interval
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        mLocationRequest.setInterval(60000);
+        mLocationRequest.setInterval(10000);
+        mLocationRequest.setFastestInterval(5000);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // TODO: Consider calling
@@ -175,6 +186,8 @@ public class MainActivity extends AppCompatActivity
         }
         LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
 
+        myLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
+
         Log.d(DEBUG_LOG,"onConnected Fired");
     }
 
@@ -187,6 +200,11 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onLocationChanged(Location location) {
         Log.d(DEBUG_LOG,location.toString());
+        String stringLocation = "Lat: " +
+                Double.toString(location.getLatitude()) +
+                " Lon: " +
+                Double.toString(location.getLongitude());
+        locaitonText.setText(stringLocation);
         Log.d(DEBUG_LOG,"onLocationChanged Fired");
     }
 
