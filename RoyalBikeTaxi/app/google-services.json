@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "828219038819",
+    "firebase_url": "https://project-2282596427065803122.firebaseio.com",
+    "project_id": "project-2282596427065803122",
+    "storage_bucket": "project-2282596427065803122.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:828219038819:android:200f06847ea8b672",
+        "android_client_info": {
+          "package_name": "com.ryanwhitell.royalbiketaxi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "828219038819-ksf7nrfo6vpdelk4fmtgmpn8rf0pbbca.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDA9PDw7Gi3Xn0vWf3d_wNkmOjprY--Y5k"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1,
+          "other_platform_oauth_client": []
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

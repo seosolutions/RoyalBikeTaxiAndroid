@@ -20,7 +20,6 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
-
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
@@ -32,9 +31,11 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.MarkerOptions;
-
-import org.w3c.dom.Text;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback,
@@ -44,8 +45,11 @@ public class MainActivity extends AppCompatActivity
     private GoogleMap mMap;
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
-    public Location myLocation;
-    public TextView locaitonText;
+    private FirebaseDatabase mDatabase;
+    private DatabaseReference myRef;
+
+    private TextView locationText;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,14 +58,17 @@ public class MainActivity extends AppCompatActivity
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        locaitonText = (TextView) findViewById(R.id.locationText);
+        locationText = (TextView) findViewById(R.id.locationText);
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
+                Log.d(DEBUG_LOG, "fab");
+                mDatabase = FirebaseDatabase.getInstance();
+                myRef = mDatabase.getReference();
+                // sets a value on node "null"
+                myRef.setValue(null);
             }
         });
 
@@ -185,8 +192,7 @@ public class MainActivity extends AppCompatActivity
             return;
         }
         LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
-
-        myLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
+        LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
 
         Log.d(DEBUG_LOG,"onConnected Fired");
     }
@@ -204,7 +210,7 @@ public class MainActivity extends AppCompatActivity
                 Double.toString(location.getLatitude()) +
                 " Lon: " +
                 Double.toString(location.getLongitude());
-        locaitonText.setText(stringLocation);
+        locationText.setText(stringLocation);
         Log.d(DEBUG_LOG,"onLocationChanged Fired");
     }
 

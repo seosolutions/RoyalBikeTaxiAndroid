@@ -25,5 +25,7 @@
         android:id="@+id/locationText"
         android:layout_alignParentTop="true"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="78dp" />
+        android:layout_marginTop="78dp"
+        android:textSize="30dp" />
+
 </RelativeLayout>
