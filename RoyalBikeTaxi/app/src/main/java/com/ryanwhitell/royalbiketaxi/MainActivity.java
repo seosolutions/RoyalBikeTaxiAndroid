@@ -2,12 +2,12 @@ package com.ryanwhitell.royalbiketaxi;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.location.Location;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 import android.view.View;
@@ -31,65 +31,67 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
+import com.google.android.gms.maps.model.Polygon;
+import com.google.android.gms.maps.model.PolygonOptions;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.ValueEventListener;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
+    /******* VARIABLES *******/
     private final String DEBUG_LOG = "RBT Debug Log";
     private GoogleMap mMap;
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
     private FirebaseDatabase mDatabase;
     private DatabaseReference myRef;
-
     private TextView locationText;
+    private boolean boundsDisplayed;
+    private Polygon bounds;
 
-
+    /******* ACTIVITY LIFECYCLE *******/
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Initialize
+        boundsDisplayed = false;
+
+        // Navigation
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-
-        locationText = (TextView) findViewById(R.id.locationText);
-
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
+        assert fab != null;
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d(DEBUG_LOG, "fab");
-                mDatabase = FirebaseDatabase.getInstance();
-                myRef = mDatabase.getReference();
-                // sets a value on node "null"
-                myRef.setValue(null);
+                onClickFAB(view);
             }
         });
-
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
         toggle.syncState();
-
         NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
+        assert navigationView != null;
         navigationView.setNavigationItemSelectedListener(this);
 
+        // Google Map
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
-
         mGoogleApiClient = new GoogleApiClient.Builder(this)
                 .addApi(LocationServices.API)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
+
+        // Debug
+        locationText = (TextView) findViewById(R.id.locationText);
 
     }
 
@@ -106,9 +108,11 @@ public class MainActivity extends AppCompatActivity
     }
 
 
+    /******* NAVIGATION *******/
     @Override
     public void onBackPressed() {
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        assert drawer != null;
         if (drawer.isDrawerOpen(GravityCompat.START)) {
             drawer.closeDrawer(GravityCompat.START);
         } else {
@@ -130,6 +134,24 @@ public class MainActivity extends AppCompatActivity
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
+        if (id == R.id.action_toggle_bounds) {
+            if (!boundsDisplayed) {
+                bounds = mMap.addPolygon(new PolygonOptions()
+                        .add(new LatLng(32.082932, -81.096341),
+                                new LatLng(32.081263, -81.091478),
+                                new LatLng(32.079078, -81.083807),
+                                new LatLng(32.062920, -81.089982),
+                                new LatLng(32.066280, -81.102650))
+                        .strokeColor(Color.BLUE));
+                boundsDisplayed = true;
+            } else {
+                bounds.remove();
+                boundsDisplayed = false;
+            }
+            Log.d(DEBUG_LOG, "toggle bounds");
+            return true;
+        }
+
         return super.onOptionsItemSelected(item);
     }
 
@@ -149,19 +171,21 @@ public class MainActivity extends AppCompatActivity
         }
 
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        assert drawer != null;
         drawer.closeDrawer(GravityCompat.START);
         return true;
     }
 
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
+    public void onClickFAB(View view){
+        Log.d(DEBUG_LOG, "fab");
+        mDatabase = FirebaseDatabase.getInstance();
+        myRef = mDatabase.getReference();
+        // sets a value on node "null"
+        myRef.setValue(null);
+    }
+
+
+    /******* GOOGLE MAP *******/
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
@@ -197,6 +221,8 @@ public class MainActivity extends AppCompatActivity
         Log.d(DEBUG_LOG,"onConnected Fired");
     }
 
+
+    /******* LOCATION SERVICES *******/
     @Override
     public void onConnectionSuspended(int i) {
         //TODO: Handle Suspended Connection
