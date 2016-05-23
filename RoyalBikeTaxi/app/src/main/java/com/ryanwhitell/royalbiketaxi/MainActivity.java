@@ -184,6 +184,10 @@ public class MainActivity extends AppCompatActivity
         myRef.setValue(null);
     }
 
+    public void signInAsDriver(View view) {
+        Log.d(DEBUG_LOG, "driver");
+    }
+
 
     /******* GOOGLE MAP *******/
     @Override
