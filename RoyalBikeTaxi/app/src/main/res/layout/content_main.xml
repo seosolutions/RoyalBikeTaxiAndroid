@@ -18,4 +18,23 @@
         android:layout_height="match_parent"
         tools:context="com.ryanwhitell.royalbiketaxi.MainActivity" />
 
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Cancel Dispatch"
+        android:id="@+id/cancel__dispatch_button"
+        android:onClick="cancelDispatch"
+        android:layout_marginTop="50dp"
+        android:layout_below="@+id/progress_bar"
+        android:layout_centerHorizontal="true" />
+
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerVertical="true"
+        android:layout_centerHorizontal="true" />
+
+
 </RelativeLayout>
