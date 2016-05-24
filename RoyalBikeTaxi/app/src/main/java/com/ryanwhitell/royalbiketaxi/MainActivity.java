@@ -19,7 +19,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.widget.TextView;
+
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
@@ -31,6 +31,8 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
 import com.google.firebase.database.DatabaseReference;
@@ -46,10 +48,10 @@ public class MainActivity extends AppCompatActivity
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
     private FirebaseDatabase mDatabase;
-    private DatabaseReference myRef;
-    private TextView locationText;
-    private boolean boundsDisplayed;
+    private DatabaseReference mDatabaseReference;
+    private boolean mBoundsDisplayed;
     private Polygon bounds;
+    private Marker mLocationMarker;
 
     /******* ACTIVITY LIFECYCLE *******/
     @Override
@@ -58,7 +60,7 @@ public class MainActivity extends AppCompatActivity
         setContentView(R.layout.activity_main);
 
         // Initialize
-        boundsDisplayed = false;
+        mBoundsDisplayed = false;
 
         // Navigation
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
@@ -68,7 +70,7 @@ public class MainActivity extends AppCompatActivity
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                onClickFAB(view);
+                onClickFab(view);
             }
         });
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
@@ -89,10 +91,6 @@ public class MainActivity extends AppCompatActivity
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
-
-        // Debug
-        locationText = (TextView) findViewById(R.id.locationText);
-
     }
 
     @Override
@@ -135,7 +133,7 @@ public class MainActivity extends AppCompatActivity
         int id = item.getItemId();
 
         if (id == R.id.action_toggle_bounds) {
-            if (!boundsDisplayed) {
+            if (!mBoundsDisplayed) {
                 bounds = mMap.addPolygon(new PolygonOptions()
                         .add(new LatLng(32.082932, -81.096341),
                                 new LatLng(32.081263, -81.091478),
@@ -143,10 +141,10 @@ public class MainActivity extends AppCompatActivity
                                 new LatLng(32.062920, -81.089982),
                                 new LatLng(32.066280, -81.102650))
                         .strokeColor(Color.BLUE));
-                boundsDisplayed = true;
+                mBoundsDisplayed = true;
             } else {
                 bounds.remove();
-                boundsDisplayed = false;
+                mBoundsDisplayed = false;
             }
             Log.d(DEBUG_LOG, "toggle bounds");
             return true;
@@ -176,12 +174,12 @@ public class MainActivity extends AppCompatActivity
         return true;
     }
 
-    public void onClickFAB(View view){
+    public void onClickFab(View view){
         Log.d(DEBUG_LOG, "fab");
         mDatabase = FirebaseDatabase.getInstance();
-        myRef = mDatabase.getReference();
+        mDatabaseReference = mDatabase.getReference();
         // sets a value on node "null"
-        myRef.setValue(null);
+        mDatabaseReference.setValue(null);
     }
 
     public void signInAsDriver(View view) {
@@ -193,6 +191,16 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
+        mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
+            @Override
+            public boolean onMarkerClick(Marker marker) {
+                marker.showInfoWindow();
+                CameraPosition cp = new CameraPosition(marker.getPosition(), 14.9f, 0, 17.5f);
+                mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cp), 500, null);
+                Log.d(DEBUG_LOG,"Marker Click");
+                return true;
+            }
+        });
 
         // Move the camera to Savannah
         LatLng savannah = new LatLng(32.072219, -81.0933537);
@@ -200,14 +208,16 @@ public class MainActivity extends AppCompatActivity
         mMap.moveCamera(CameraUpdateFactory.newCameraPosition(cp));
     }
 
+
+    /******* LOCATION SERVICES *******/
     @Override
     public void onConnected(@Nullable Bundle bundle) {
         mLocationRequest = LocationRequest.create();
         //TODO: look into HIGH ACCURACY vs BATTER and DATA saver
         // Consider, to safe driver data and battery, letting him choose the interval
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        mLocationRequest.setInterval(10000);
-        mLocationRequest.setFastestInterval(5000);
+        mLocationRequest.setInterval(5000);
+        mLocationRequest.setFastestInterval(1000);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // TODO: Consider calling
@@ -225,8 +235,6 @@ public class MainActivity extends AppCompatActivity
         Log.d(DEBUG_LOG,"onConnected Fired");
     }
 
-
-    /******* LOCATION SERVICES *******/
     @Override
     public void onConnectionSuspended(int i) {
         //TODO: Handle Suspended Connection
@@ -235,12 +243,15 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onLocationChanged(Location location) {
-        Log.d(DEBUG_LOG,location.toString());
-        String stringLocation = "Lat: " +
-                Double.toString(location.getLatitude()) +
-                " Lon: " +
-                Double.toString(location.getLongitude());
-        locationText.setText(stringLocation);
+
+        if (mLocationMarker != null) {
+            mLocationMarker.remove();
+        }
+
+        mLocationMarker = mMap.addMarker(new MarkerOptions()
+                .position(new LatLng(location.getLatitude(), location.getLongitude()))
+                .title("My Location"));
+
         Log.d(DEBUG_LOG,"onLocationChanged Fired");
     }
 

@@ -10,26 +10,31 @@
     android:theme="@style/ThemeOverlay.AppCompat.Dark"
     android:orientation="vertical"
     android:gravity="bottom"
-    android:backgroundTint="#212121">
+    android:backgroundTint="#212121"
+    android:weightSum="1">
 
     <ImageView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="61dp"
+        android:layout_height="70dp"
         android:paddingTop="@dimen/nav_header_vertical_spacing"
-        android:src="@android:drawable/sym_def_app_icon"
-        android:id="@+id/imageView" />
+        android:src="@drawable/ic_directions_bike_white_24px"
+        android:id="@+id/imageView"
+        android:onClick="signInAsDriver"/>
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingTop="@dimen/nav_header_vertical_spacing"
         android:text="Royal Bike Taxi"
-        android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
+        android:textAppearance="@style/TextAppearance.AppCompat.Body1"
+        android:textSize="9pt"/>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="912-341-3944"
-        android:id="@+id/textView" />
+        android:id="@+id/textView"
+        android:textSize="8pt"/>
+
 
 </LinearLayout>
