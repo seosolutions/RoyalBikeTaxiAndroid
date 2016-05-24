@@ -46,6 +46,8 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
+import java.util.List;
+
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
@@ -70,7 +72,8 @@ public class MainActivity extends AppCompatActivity
     // Logic and Navigation
     private boolean mDispatchState;
     private int mDriverClickCounter;
-    private AlertDialog.Builder mAlert;
+    private AlertDialog.Builder mConfirmDispatchAlert;
+    private AlertDialog.Builder mOutOfBoundsAlert;
     private Button mCancelDispatch;
     private FloatingActionButton mFAB;
     private ProgressBar mActivityWheel;
@@ -87,7 +90,7 @@ public class MainActivity extends AppCompatActivity
         mBoundsDisplayed = false;
         mDriverClickCounter = 1;
         mDispatchState = false;
-        mAlert = new AlertDialog.Builder(this)
+        mConfirmDispatchAlert = new AlertDialog.Builder(this)
                 .setTitle("Confirm Dispatch to My Location")
                 .setMessage(
                         "By clicking 'Confirm' you agree " +
@@ -99,13 +102,33 @@ public class MainActivity extends AppCompatActivity
                 .setPositiveButton("Confirm", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        alertButtonClick(which);
+                        confirmDispatch(which);
                     }
                 })
                 .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        alertButtonClick(which);
+                        confirmDispatch(which);
+                    }
+                });
+        mOutOfBoundsAlert = new AlertDialog.Builder(this)
+                .setTitle("Out of Bounds Alert")
+                .setMessage(
+                        "You are currently trying to request " +
+                                "a dispatch outside of our " +
+                                "operating boundaries. Please move " +
+                                "into the boundaries. To view boundaries, click " +
+                                "'Toggle Boundaries'")
+                .setPositiveButton("Confirm", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        toggleBoundaries(true);
+                    }
+                })
+                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        toggleBoundaries(false);
                     }
                 });
         mCancelDispatch = (Button) findViewById(R.id.cancel__dispatch_button);
@@ -202,18 +225,7 @@ public class MainActivity extends AppCompatActivity
         int id = item.getItemId();
 
         if (id == R.id.action_toggle_bounds) {
-            if (!mBoundsDisplayed) {
-                mBounds = mMap.addPolygon(new PolygonOptions()
-                        .add(new LatLng(32.082932, -81.096341),
-                                new LatLng(32.079433, -81.083713),
-                                new LatLng(32.062920, -81.089982),
-                                new LatLng(32.066280, -81.102650))
-                        .strokeColor(Color.BLUE));
-                mBoundsDisplayed = true;
-            } else {
-                mBounds.remove();
-                mBoundsDisplayed = false;
-            }
+            toggleBoundaries(true);
             return true;
         }
 
@@ -241,14 +253,36 @@ public class MainActivity extends AppCompatActivity
         return true;
     }
 
+    public void toggleBoundaries(Boolean toggle) {
+        if (toggle) {
+            if (!mBoundsDisplayed) {
+                mBounds = mMap.addPolygon(new PolygonOptions()
+                        .add(new LatLng(32.082932, -81.096341),
+                                new LatLng(32.079433, -81.083713),
+                                new LatLng(32.062920, -81.089982),
+                                new LatLng(32.066280, -81.102650))
+                        .strokeColor(Color.BLUE));
+                mBoundsDisplayed = true;
+            } else {
+                mBounds.remove();
+                mBoundsDisplayed = false;
+            }
+        }
+    }
+
 
     /******* USER DISPATCH LOGIC *******/
     public void onClickFab(View view){
-        mAlert.create();
-        mAlert.show();
+        if (withinBounds()) {
+            mConfirmDispatchAlert.create();
+            mConfirmDispatchAlert.show();
+        } else {
+            mOutOfBoundsAlert.create();
+            mOutOfBoundsAlert.show();
+        }
     }
 
-    public void alertButtonClick(int which) {
+    public void confirmDispatch(int which) {
         if (which == DialogInterface.BUTTON_POSITIVE) {
             // 1. Change dispatch state to "currently requesting a dispatch"
             mDispatchState = true;
@@ -278,16 +312,39 @@ public class MainActivity extends AppCompatActivity
         destroyDispatchRequest();
     }
 
-    public void trackUserLocation(Location location) {
-        mDatabaseRef.child("Dispatch Request").child(mDispatchRequestKey).setValue(location);
-    }
-
     public void destroyDispatchRequest() {
         if (mDispatchRequestKey != null) {
             mDatabaseRef.child("Dispatch Request").child(mDispatchRequestKey).removeValue();
             mDispatchRequestKey = null;
         }
-        Log.e(DEBUG_LOG,"DESTROYED");
+    }
+
+    public boolean withinBounds() {
+
+        LatLng A = new LatLng(32.082932, -81.096341);
+        LatLng B = new LatLng(32.079433, -81.083713);
+        LatLng C = new LatLng(32.062920, -81.089982);
+        LatLng D = new LatLng(32.066280, -81.102650);
+
+        LatLng P = mLocationMarker.getPosition();
+
+        Double AREA_BOUND = Math.sqrt((Math.pow(A.latitude - B.latitude, 2) + Math.pow(A.longitude - B.longitude, 2))) *
+                Math.sqrt((Math.pow(A.latitude - D.latitude, 2) + Math.pow(A.longitude - D.longitude, 2)));
+
+        Double AREA_TOTAL = calculateArea(A, B, P) +
+                calculateArea(A, D, P) +
+                calculateArea(D, C, P) +
+                calculateArea(C, B, P);
+
+        return (AREA_BOUND >= AREA_TOTAL);
+    }
+
+    public double calculateArea(LatLng A, LatLng B, LatLng C) {
+        Double a = Math.sqrt((Math.pow(A.latitude - B.latitude, 2) + Math.pow(A.longitude - B.longitude, 2)));
+        Double b = Math.sqrt((Math.pow(A.latitude - C.latitude, 2) + Math.pow(A.longitude - C.longitude, 2)));
+        Double c = Math.sqrt((Math.pow(B.latitude - C.latitude, 2) + Math.pow(B.longitude - C.longitude, 2)));
+        Double s = (a+b+c) / 2;
+        return Math.sqrt(s*(s-a)*(s-b)*(s-c));
     }
 
 
@@ -379,5 +436,9 @@ public class MainActivity extends AppCompatActivity
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
         //TODO: Handle Failed Connection
         Log.d(DEBUG_LOG,"onConnectionFailed Fired");
+    }
+
+    public void trackUserLocation(Location location) {
+        mDatabaseRef.child("Dispatch Request").child(mDispatchRequestKey).setValue(location);
     }
 }
