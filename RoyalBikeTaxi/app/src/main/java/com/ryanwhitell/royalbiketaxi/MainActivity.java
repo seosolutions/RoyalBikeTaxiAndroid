@@ -23,7 +23,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Button;
 import android.widget.ProgressBar;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -63,6 +62,7 @@ public class MainActivity extends AppCompatActivity
 
     // Firebase database
     private DatabaseReference mDatabaseRef;
+    private String mDispatchRequestKey;
 
     // Location services
     private Marker mLocationMarker;
@@ -94,17 +94,18 @@ public class MainActivity extends AppCompatActivity
                                 "to accepting a ride from our nearest " +
                                 "driver. A bike will be dispatched to your " +
                                 "location, please wait in a convenient pickup " +
-                                "location. Thank you!")
+                                "location and do not navigate away " +
+                                "from the current screen. Thank you!")
                 .setPositiveButton("Confirm", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        alertButtonClick(dialog, which);
+                        alertButtonClick(which);
                     }
                 })
                 .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        alertButtonClick(dialog, which);
+                        alertButtonClick(which);
                     }
                 });
         mCancelDispatch = (Button) findViewById(R.id.cancel__dispatch_button);
@@ -153,7 +154,7 @@ public class MainActivity extends AppCompatActivity
         navigationView.setNavigationItemSelectedListener(this);
 
 
-        // Google Map
+        // Google Map and Api
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
@@ -163,18 +164,14 @@ public class MainActivity extends AppCompatActivity
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
         mGoogleApiClient.connect();
     }
 
     @Override
-    protected void onStop() {
+    protected void onDestroy() {
+        super.onDestroy();
         mGoogleApiClient.disconnect();
-        super.onStop();
+        destroyDispatchRequest();
     }
 
 
@@ -217,7 +214,6 @@ public class MainActivity extends AppCompatActivity
                 mBounds.remove();
                 mBoundsDisplayed = false;
             }
-            Log.d(DEBUG_LOG, "toggle mBounds");
             return true;
         }
 
@@ -252,26 +248,46 @@ public class MainActivity extends AppCompatActivity
         mAlert.show();
     }
 
-    public void trackUser(Location location) {
-
-    }
-
-    public void alertButtonClick(DialogInterface dialog, int which) {
+    public void alertButtonClick(int which) {
         if (which == DialogInterface.BUTTON_POSITIVE) {
+            // 1. Change dispatch state to "currently requesting a dispatch"
             mDispatchState = true;
+
+            // 2. Hide fab and show dispatch request state views
             mCancelDispatch.setVisibility(View.VISIBLE);
             mActivityWheel.setVisibility(View.VISIBLE);
             mFAB.setVisibility(View.GONE);
             Toast.makeText(this, "Requesting a driver...", Toast.LENGTH_LONG).show();
+
+            // 3. Create a dispatch request in the database
+            mDispatchRequestKey = mDatabaseRef.child("Dispatch Request").push().getKey();
         }
     }
 
     public void cancelDispatch(View view) {
+        // 1. Change dispatch state to "not requesting a dispatch"
         mDispatchState = false;
+
+        // 2. Show fab and hide dispatch request state views
         view.setVisibility(View.GONE);
         mActivityWheel.setVisibility(View.GONE);
         mFAB.setVisibility(View.VISIBLE);
         Toast.makeText(this, "Dispatch Cancelled!", Toast.LENGTH_LONG).show();
+
+        // 3. Delete dispatch request in the database
+        destroyDispatchRequest();
+    }
+
+    public void trackUserLocation(Location location) {
+        mDatabaseRef.child("Dispatch Request").child(mDispatchRequestKey).setValue(location);
+    }
+
+    public void destroyDispatchRequest() {
+        if (mDispatchRequestKey != null) {
+            mDatabaseRef.child("Dispatch Request").child(mDispatchRequestKey).removeValue();
+            mDispatchRequestKey = null;
+        }
+        Log.e(DEBUG_LOG,"DESTROYED");
     }
 
 
@@ -288,7 +304,6 @@ public class MainActivity extends AppCompatActivity
 
     /******* DATABASE *******/
     public void firebaseDataChanged(DataSnapshot dataSnapshot) {
-        Log.d(DEBUG_LOG, "database Changed");
     }
 
 
@@ -321,8 +336,8 @@ public class MainActivity extends AppCompatActivity
         //TODO: look into HIGH ACCURACY vs BATTER and DATA saver
         // Consider, to safe driver data and battery, letting him choose the interval
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        locationRequest.setInterval(1000);
-        locationRequest.setFastestInterval(500);
+        locationRequest.setInterval(5000);
+        locationRequest.setFastestInterval(2500);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             // TODO: Consider calling
@@ -354,6 +369,10 @@ public class MainActivity extends AppCompatActivity
         mLocationMarker = mMap.addMarker(new MarkerOptions()
                 .position(new LatLng(location.getLatitude(), location.getLongitude()))
                 .title("My Location"));
+        
+        if (mDispatchState) {
+            trackUserLocation(location);
+        }
     }
 
     @Override
