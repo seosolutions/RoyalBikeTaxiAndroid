@@ -52,15 +52,18 @@ public class MainActivity extends AppCompatActivity
     private boolean mBoundsDisplayed;
     private Polygon bounds;
     private Marker mLocationMarker;
+    private int driverClickCounter;
 
+    
     /******* ACTIVITY LIFECYCLE *******/
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initialize
+        // Initialize Variables
         mBoundsDisplayed = false;
+        driverClickCounter = 1;
 
         // Navigation
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
@@ -174,10 +177,14 @@ public class MainActivity extends AppCompatActivity
     }
 
     public void onClickFab(View view){
-        Log.d(DEBUG_LOG, "fab");
     }
 
     public void signInAsDriver(View view) {
+        if (driverClickCounter < 7) {
+            driverClickCounter++;
+        } else {
+            Log.d(DEBUG_LOG, "login");
+        }
         Log.d(DEBUG_LOG, "driver");
     }
 
