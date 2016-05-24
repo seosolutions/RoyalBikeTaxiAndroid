@@ -136,8 +136,7 @@ public class MainActivity extends AppCompatActivity
             if (!mBoundsDisplayed) {
                 bounds = mMap.addPolygon(new PolygonOptions()
                         .add(new LatLng(32.082932, -81.096341),
-                                new LatLng(32.081263, -81.091478),
-                                new LatLng(32.079078, -81.083807),
+                                new LatLng(32.079433, -81.083713),
                                 new LatLng(32.062920, -81.089982),
                                 new LatLng(32.066280, -81.102650))
                         .strokeColor(Color.BLUE));
@@ -176,10 +175,6 @@ public class MainActivity extends AppCompatActivity
 
     public void onClickFab(View view){
         Log.d(DEBUG_LOG, "fab");
-        mDatabase = FirebaseDatabase.getInstance();
-        mDatabaseReference = mDatabase.getReference();
-        // sets a value on node "null"
-        mDatabaseReference.setValue(null);
     }
 
     public void signInAsDriver(View view) {
