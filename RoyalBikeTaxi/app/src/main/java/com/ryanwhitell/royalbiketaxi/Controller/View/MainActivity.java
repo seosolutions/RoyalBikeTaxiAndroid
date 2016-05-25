@@ -1,4 +1,4 @@
-package com.ryanwhitell.royalbiketaxi;
+package com.ryanwhitell.royalbiketaxi.Controller.View;
 
 import android.Manifest;
 import android.content.DialogInterface;
@@ -47,6 +47,8 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.ryanwhitell.royalbiketaxi.Controller.Model.Driver;
+import com.ryanwhitell.royalbiketaxi.R;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback,
