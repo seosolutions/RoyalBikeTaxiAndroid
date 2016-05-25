@@ -1,5 +1,6 @@
 package com.ryanwhitell.royalbiketaxi.Controller.View;
 
+import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -17,9 +18,6 @@ import com.ryanwhitell.royalbiketaxi.Controller.Model.Driver;
 
 public class LoginActivity extends AppCompatActivity {
 
-    // Firebase database
-    private DatabaseReference mDatabaseRef;
-
     // Driver array
     Driver[] mDrivers;
 
@@ -31,8 +29,8 @@ public class LoginActivity extends AppCompatActivity {
 
         // Initialize Database and driver array
         FirebaseDatabase database = FirebaseDatabase.getInstance();
-        mDatabaseRef = database.getReference("Drivers");
-        mDatabaseRef.addListenerForSingleValueEvent(new ValueEventListener() {
+        DatabaseReference databaseRefDrivers = database.getReference("Drivers");
+        databaseRefDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 int numberOfDrivers = (int) dataSnapshot.getChildrenCount();
@@ -63,7 +61,9 @@ public class LoginActivity extends AppCompatActivity {
 
         if (checkName(name)) {
             if (checkPassword(pass)) {
-                Log.d("RBT Debug Log", "Success");
+                Intent intent = new Intent(this, DriverActivity.class);
+                intent.putExtra("name", name);
+                startActivity(intent);
             } else {
                 Toast.makeText(this, "Invalid Password", Toast.LENGTH_LONG).show();
             }

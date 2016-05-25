@@ -42,12 +42,8 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.ValueEventListener;
-import com.ryanwhitell.royalbiketaxi.Controller.Model.Driver;
 import com.ryanwhitell.royalbiketaxi.R;
 
 public class MainActivity extends AppCompatActivity
@@ -75,7 +71,7 @@ public class MainActivity extends AppCompatActivity
     private Marker mLocationMarker;
 
     // Firebase database
-    private DatabaseReference mDatabaseRef;
+    private DatabaseReference mDatabaseRefRequestDispatch;
     private String mDispatchRequestKey;
 
     // Navigation
@@ -170,20 +166,7 @@ public class MainActivity extends AppCompatActivity
 
         // Initialize Database
         FirebaseDatabase database = FirebaseDatabase.getInstance();
-        mDatabaseRef = database.getReference();
-        mDatabaseRef.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                firebaseDataChanged(dataSnapshot);
-            }
-
-            @Override
-            public void onCancelled(DatabaseError firebaseError) {
-                // Failed to read value
-                // TODO: Handle error
-                Log.w(DEBUG_LOG, "Failed to read value.", firebaseError.toException());
-            }
-        });
+        mDatabaseRefRequestDispatch = database.getReference("Dispatch Request");
 
         // Google Api - Location, Map
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -199,10 +182,9 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        mGoogleApiClient.disconnect();
-        destroyDispatchRequest();
+    protected void onRestart() {
+        super.onRestart();
+        mGoogleApiClient.connect();
     }
 
     @Override
@@ -305,7 +287,7 @@ public class MainActivity extends AppCompatActivity
             Toast.makeText(this, "Requesting a driver...", Toast.LENGTH_LONG).show();
 
             // 3. Create a dispatch request in the database
-            mDispatchRequestKey = mDatabaseRef.child("Dispatch Request").push().getKey();
+            mDispatchRequestKey = mDatabaseRefRequestDispatch.push().getKey();
         }
     }
 
@@ -325,7 +307,7 @@ public class MainActivity extends AppCompatActivity
 
     public void destroyDispatchRequest() {
         if (mDispatchRequestKey != null) {
-            mDatabaseRef.child("Dispatch Request").child(mDispatchRequestKey).removeValue();
+            mDatabaseRefRequestDispatch.child(mDispatchRequestKey).removeValue();
             mDispatchRequestKey = null;
         }
     }
@@ -368,12 +350,6 @@ public class MainActivity extends AppCompatActivity
             Intent intent = new Intent(this, LoginActivity.class);
             startActivity(intent);
         }
-    }
-
-
-    /******* DATABASE *******/
-    public void firebaseDataChanged(DataSnapshot dataSnapshot) {
-        // TODO: Use to update view of driver on route to dispatch
     }
 
 
@@ -453,6 +429,6 @@ public class MainActivity extends AppCompatActivity
     }
 
     public void trackUserLocation(Location location) {
-        mDatabaseRef.child("Dispatch Request").child(mDispatchRequestKey).setValue(location);
+        mDatabaseRefRequestDispatch.child(mDispatchRequestKey).setValue(location);
     }
 }
