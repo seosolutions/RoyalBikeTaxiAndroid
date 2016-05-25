@@ -2,6 +2,7 @@ package com.ryanwhitell.royalbiketaxi;
 
 import android.Manifest;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
@@ -34,6 +35,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
@@ -46,8 +48,6 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
-import java.util.List;
-
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
@@ -56,27 +56,30 @@ public class MainActivity extends AppCompatActivity
     /******* VARIABLES *******/
     private final String DEBUG_LOG = "RBT Debug Log";
 
-    // Google map Api
+    // Logic
+    private boolean mBoundsDisplayed;
+    private boolean mDispatchState;
+    private int mDriverClickCounter;
+
+    // Alerts
+    private AlertDialog.Builder mConfirmDispatchAlert;
+    private AlertDialog.Builder mOutOfBoundsAlert;
+    private ProgressBar mActivityWheel;
+
+    // Google Api - Location, Map
     private GoogleMap mMap;
     private GoogleApiClient mGoogleApiClient;
     private Polygon mBounds;
-    private boolean mBoundsDisplayed;
+    private Marker mLocationMarker;
 
     // Firebase database
     private DatabaseReference mDatabaseRef;
     private String mDispatchRequestKey;
 
-    // Location services
-    private Marker mLocationMarker;
-
-    // Logic and Navigation
-    private boolean mDispatchState;
-    private int mDriverClickCounter;
-    private AlertDialog.Builder mConfirmDispatchAlert;
-    private AlertDialog.Builder mOutOfBoundsAlert;
+    // Navigation
     private Button mCancelDispatch;
-    private FloatingActionButton mFAB;
-    private ProgressBar mActivityWheel;
+    private FloatingActionButton mFab;
+
 
 
     /******* ACTIVITY LIFECYCLE *******/
@@ -85,15 +88,16 @@ public class MainActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-
-        // Initialize Variables
+        // Initialize Logic
         mBoundsDisplayed = false;
         mDriverClickCounter = 1;
         mDispatchState = false;
+
+        // Initialize Alerts
         mConfirmDispatchAlert = new AlertDialog.Builder(this)
                 .setTitle("Confirm Dispatch to My Location")
                 .setMessage(
-                        "By clicking 'Confirm' you agree " +
+                        "By clicking 'CONFIRM' you agree " +
                                 "to accepting a ride from our nearest " +
                                 "driver. A bike will be dispatched to your " +
                                 "location, please wait in a convenient pickup " +
@@ -111,35 +115,58 @@ public class MainActivity extends AppCompatActivity
                         confirmDispatch(which);
                     }
                 });
+
         mOutOfBoundsAlert = new AlertDialog.Builder(this)
                 .setTitle("Out of Bounds Alert")
                 .setMessage(
                         "You are currently trying to request " +
                                 "a dispatch outside of our " +
-                                "operating boundaries. Please move " +
-                                "into the boundaries. To view boundaries, click " +
-                                "'Toggle Boundaries'")
-                .setPositiveButton("Confirm", new DialogInterface.OnClickListener() {
+                                "operating boundaries. To view boundaries, click " +
+                                "'TOGGLE BOUNDS'")
+                .setPositiveButton("Toggle Bounds", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         toggleBoundaries(true);
                     }
                 })
-                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                .setNegativeButton("Back", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         toggleBoundaries(false);
                     }
                 });
+
+        // Initialize Navigation
         mCancelDispatch = (Button) findViewById(R.id.cancel__dispatch_button);
         assert mCancelDispatch != null;
         mCancelDispatch.setVisibility(View.GONE);
+
         mActivityWheel = (ProgressBar) findViewById(R.id.progress_bar);
         assert mActivityWheel != null;
         mActivityWheel.setVisibility(View.GONE);
 
+        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
 
-        // Database
+        mFab = (FloatingActionButton) findViewById(R.id.fab);
+        assert mFab != null;
+        mFab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                onClickFab(view);
+            }
+        });
+
+        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
+                this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
+        toggle.syncState();
+
+        NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
+        assert navigationView != null;
+        navigationView.setNavigationItemSelectedListener(this);
+
+        // Initialize Database
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         mDatabaseRef = database.getReference();
         mDatabaseRef.addValueEventListener(new ValueEventListener() {
@@ -156,32 +183,11 @@ public class MainActivity extends AppCompatActivity
             }
         });
 
-
-        // Navigation
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        mFAB = (FloatingActionButton) findViewById(R.id.fab);
-        assert mFAB != null;
-        mFAB.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                onClickFab(view);
-            }
-        });
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
-        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
-                this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
-        toggle.syncState();
-        NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
-        assert navigationView != null;
-        navigationView.setNavigationItemSelectedListener(this);
-
-
-        // Google Map and Api
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
+        // Google Api - Location, Map
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
         mGoogleApiClient = new GoogleApiClient.Builder(this)
                 .addApi(LocationServices.API)
                 .addConnectionCallbacks(this)
@@ -193,6 +199,13 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        mGoogleApiClient.disconnect();
+        destroyDispatchRequest();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
         mGoogleApiClient.disconnect();
         destroyDispatchRequest();
     }
@@ -212,16 +225,12 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.main, menu);
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
         if (id == R.id.action_toggle_bounds) {
@@ -234,7 +243,7 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public boolean onNavigationItemSelected(MenuItem item) {
-        // Handle navigation view item clicks here.
+
         int id = item.getItemId();
 
         if (id == R.id.nav_book) {
@@ -290,7 +299,7 @@ public class MainActivity extends AppCompatActivity
             // 2. Hide fab and show dispatch request state views
             mCancelDispatch.setVisibility(View.VISIBLE);
             mActivityWheel.setVisibility(View.VISIBLE);
-            mFAB.setVisibility(View.GONE);
+            mFab.setVisibility(View.GONE);
             Toast.makeText(this, "Requesting a driver...", Toast.LENGTH_LONG).show();
 
             // 3. Create a dispatch request in the database
@@ -305,7 +314,7 @@ public class MainActivity extends AppCompatActivity
         // 2. Show fab and hide dispatch request state views
         view.setVisibility(View.GONE);
         mActivityWheel.setVisibility(View.GONE);
-        mFAB.setVisibility(View.VISIBLE);
+        mFab.setVisibility(View.VISIBLE);
         Toast.makeText(this, "Dispatch Cancelled!", Toast.LENGTH_LONG).show();
 
         // 3. Delete dispatch request in the database
@@ -321,6 +330,7 @@ public class MainActivity extends AppCompatActivity
 
     public boolean withinBounds() {
 
+        // Savannah Bike Taxi operating boundaries
         LatLng A = new LatLng(32.082932, -81.096341);
         LatLng B = new LatLng(32.079433, -81.083713);
         LatLng C = new LatLng(32.062920, -81.089982);
@@ -348,19 +358,20 @@ public class MainActivity extends AppCompatActivity
     }
 
 
-    /******* NAVIGATE TO DRIVER VIEW *******/
+    /******* NAVIGATE TO LOGIN VIEW *******/
     public void signInAsDriver(View view) {
         if (mDriverClickCounter < 7) {
             mDriverClickCounter++;
         } else {
-            Log.d(DEBUG_LOG, "login");
+            Intent intent = new Intent(this, LoginActivity.class);
+            startActivity(intent);
         }
-        Log.d(DEBUG_LOG, "driver");
     }
 
 
     /******* DATABASE *******/
     public void firebaseDataChanged(DataSnapshot dataSnapshot) {
+        // TODO: Use to update view of driver on route to dispatch
     }
 
 
@@ -368,6 +379,7 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
+
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
             @Override
             public boolean onMarkerClick(Marker marker) {
@@ -379,7 +391,6 @@ public class MainActivity extends AppCompatActivity
             }
         });
 
-        // Move the camera to Savannah
         LatLng savannah = new LatLng(32.072219, -81.0933537);
         CameraPosition cp = new CameraPosition(savannah, 14.9f, 0, 17.5f);
         mMap.moveCamera(CameraUpdateFactory.newCameraPosition(cp));
@@ -425,7 +436,8 @@ public class MainActivity extends AppCompatActivity
 
         mLocationMarker = mMap.addMarker(new MarkerOptions()
                 .position(new LatLng(location.getLatitude(), location.getLongitude()))
-                .title("My Location"));
+                .title("My Location")
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
         
         if (mDispatchState) {
             trackUserLocation(location);
