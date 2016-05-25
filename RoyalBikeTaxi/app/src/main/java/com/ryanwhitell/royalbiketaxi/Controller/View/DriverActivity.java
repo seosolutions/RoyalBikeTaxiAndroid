@@ -47,13 +47,14 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     private Marker mLocationMarker;
 
     // Firebase database
-    private DatabaseReference mDatabaseRef;
+    private DatabaseReference mDatabaseRefAvailableDrivers;
+    private DatabaseReference mDatabaseRefLocationRequest;
+    private String mLocationRequestKey;
 
-    // Dispatch Logic
-    public boolean mDispatchState;
-
-    // Driver ID
-    String mName;
+    // Driver info
+    private String mName;
+    private boolean mAvailable;
+    private Location mDriverLocation;
 
 
     /******* ACTIVITY LIFECYCLE *******/
@@ -61,8 +62,14 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_driver);
+
+        // Initialize driver info
+        mAvailable = true;
+
         Intent intent = getIntent();
         mName = intent.getStringExtra("name");
+
+        mDriverLocation = null;
 
         // Initialize Navigation
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
@@ -74,11 +81,16 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                refreshDriverLocations();
+                Log.d(DEBUG_LOG, "fab");
+                requestDriverLocations();
             }
         });
 
-        // Google Api - Location, Map
+        // Initialize database
+        FirebaseDatabase database = FirebaseDatabase.getInstance();
+        mDatabaseRefAvailableDrivers = database.getReference("Available Drivers");
+
+        // Initialize Google Api - Location, Map
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
@@ -88,13 +100,30 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
-        mGoogleApiClient.connect();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        FirebaseDatabase database = FirebaseDatabase.getInstance();
+        mDatabaseRefLocationRequest = database.getReference("Refresh Request");
+        mDatabaseRefLocationRequest.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                driverLocationRequestReceived();
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                // TODO: handle
+            }
+        });
     }
 
     @Override
     protected void onRestart() {
         super.onRestart();
-        mGoogleApiClient.connect();
     }
 
     @Override
@@ -105,9 +134,21 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
 
     /******* DRIVER LOGIC *******/
-    public void refreshDriverLocations() {
-        //TODO: make fab refresh map with driver locations
+    public void requestDriverLocations() {
+        Log.d(DEBUG_LOG, "I have requested all driver locations");
+        mLocationRequestKey = mDatabaseRefLocationRequest.push().getKey();
+        mDatabaseRefLocationRequest.child(mLocationRequestKey).setValue("REQUEST");
+        mDatabaseRefLocationRequest.child(mLocationRequestKey).removeValue();
     }
+
+    public void driverLocationRequestReceived() {
+        Log.d(DEBUG_LOG, "My Location was requested - connect");
+        mGoogleApiClient.connect();
+        if (mDriverLocation != null) {
+            mDatabaseRefAvailableDrivers.child(mName).setValue(mDriverLocation);
+        }
+    }
+
 
     /******* GOOGLE MAP *******/
     @Override
@@ -172,6 +213,13 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                 .position(new LatLng(location.getLatitude(), location.getLongitude()))
                 .title("ME")
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+
+        mDriverLocation = location;
+
+        Log.d(DEBUG_LOG, "Location Set - Disconnected");
+
+        // Only fire once on each connect
+        mGoogleApiClient.disconnect();
     }
 
     @Override

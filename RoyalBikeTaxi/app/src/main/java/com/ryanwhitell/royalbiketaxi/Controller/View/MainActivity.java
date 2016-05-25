@@ -81,6 +81,8 @@ public class MainActivity extends AppCompatActivity
 
 
     /******* ACTIVITY LIFECYCLE *******/
+    //TODO: Keep from sleeping, changing state in any way
+    // are tou sure you want to navigate away from page
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -168,7 +170,7 @@ public class MainActivity extends AppCompatActivity
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         mDatabaseRefRequestDispatch = database.getReference("Dispatch Request");
 
-        // Google Api - Location, Map
+        // Initialize Google Api - Location, Map
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);

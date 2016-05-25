@@ -35,7 +35,6 @@ public class LoginActivity extends AppCompatActivity {
             public void onDataChange(DataSnapshot dataSnapshot) {
                 int numberOfDrivers = (int) dataSnapshot.getChildrenCount();
                 mDrivers = new Driver[numberOfDrivers];
-                Log.d("RBT Debug Log", Integer.toString(numberOfDrivers));
 
                 for (int i = 0; i < numberOfDrivers; i++) {
                     mDrivers[i] = dataSnapshot.child(Integer.toString(i)).getValue(Driver.class);
