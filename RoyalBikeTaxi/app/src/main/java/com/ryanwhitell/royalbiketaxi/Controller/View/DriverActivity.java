@@ -35,6 +35,8 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.ryanwhitell.royalbiketaxi.R;
 
+import java.util.Map;
+
 public class DriverActivity extends AppCompatActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
@@ -139,14 +141,48 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         mLocationRequestKey = mDatabaseRefLocationRequest.push().getKey();
         mDatabaseRefLocationRequest.child(mLocationRequestKey).setValue("REQUEST");
         mDatabaseRefLocationRequest.child(mLocationRequestKey).removeValue();
+        updateMap();
     }
 
     public void driverLocationRequestReceived() {
         Log.d(DEBUG_LOG, "My Location was requested - connect");
         mGoogleApiClient.connect();
-        if (mDriverLocation != null) {
+        if ((mDriverLocation != null) && mAvailable) {
             mDatabaseRefAvailableDrivers.child(mName).setValue(mDriverLocation);
+        } else {
+            mDatabaseRefAvailableDrivers.child(mName).setValue(null);
         }
+    }
+
+    public void updateMap(){
+        mDatabaseRefAvailableDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Map<String, Object> driverLocations = (Map<String, Object>) dataSnapshot.getValue();
+
+                mMap.clear();
+
+                for (Map.Entry<String, Object> driver : driverLocations.entrySet()) {
+
+                    if (driver.getKey() != mName) {
+                        Double lat = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString());
+                        Double lon = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString());
+
+                        mMap.addMarker(new MarkerOptions()
+                                .position(new LatLng(lat, lon))
+                                .title(driver.getKey().toString())
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
+                    }
+                }
+
+                mGoogleApiClient.connect();
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                //TODO: handle
+            }
+        });
     }
 
 
