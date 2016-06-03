@@ -49,9 +49,10 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     private Marker mLocationMarker;
 
     // Firebase database
-    private DatabaseReference mDatabaseRefAvailableDrivers;
-    private DatabaseReference mDatabaseRefLocationRequest;
-    private String mLocationRequestKey;
+    private DatabaseReference mFirebaseAvailableDrivers;
+    private DatabaseReference mFirebaseLocationRequest;
+    private DatabaseReference mFirebaseDriverDispatchRequest;
+    private String mDispatchRequestKey;
 
     // Driver info
     private String mName;
@@ -90,7 +91,26 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
         // Initialize database
         FirebaseDatabase database = FirebaseDatabase.getInstance();
-        mDatabaseRefAvailableDrivers = database.getReference("Available Drivers");
+        mFirebaseAvailableDrivers = database.getReference("Available Drivers");
+
+        mFirebaseDriverDispatchRequest = database.getReference("Available Drivers").child(mName).child("Dispatch Request");
+        mFirebaseDriverDispatchRequest.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if (dataSnapshot.getValue() != null) {
+                    if (dataSnapshot.getValue().equals("CONNECTED")) {
+                        connectedToCustomer(dataSnapshot);
+                    } else {
+                        incomingRequest(dataSnapshot);
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
 
         // Initialize Google Api - Location, Map
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -109,8 +129,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         super.onStart();
 
         FirebaseDatabase database = FirebaseDatabase.getInstance();
-        mDatabaseRefLocationRequest = database.getReference("Refresh Request");
-        mDatabaseRefLocationRequest.addValueEventListener(new ValueEventListener() {
+        mFirebaseLocationRequest = database.getReference("Location Request");
+        mFirebaseLocationRequest.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 driverLocationRequestReceived();
@@ -121,6 +141,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                 // TODO: handle
             }
         });
+
     }
 
     @Override
@@ -138,9 +159,9 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     /******* DRIVER LOGIC *******/
     public void requestDriverLocations() {
         Log.d(DEBUG_LOG, "I have requested all driver locations");
-        mLocationRequestKey = mDatabaseRefLocationRequest.push().getKey();
-        mDatabaseRefLocationRequest.child(mLocationRequestKey).setValue("REQUEST");
-        mDatabaseRefLocationRequest.child(mLocationRequestKey).removeValue();
+        String key = mFirebaseLocationRequest.push().getKey();
+        mFirebaseLocationRequest.child(key).setValue("REQUEST");
+        mFirebaseLocationRequest.child(key).removeValue();
         updateMap();
     }
 
@@ -148,14 +169,15 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         Log.d(DEBUG_LOG, "My Location was requested - connect");
         mGoogleApiClient.connect();
         if ((mDriverLocation != null) && mAvailable) {
-            mDatabaseRefAvailableDrivers.child(mName).setValue(mDriverLocation);
+            mFirebaseAvailableDrivers.child(mName).child("latitude").setValue(mDriverLocation.getLatitude());
+            mFirebaseAvailableDrivers.child(mName).child("longitude").setValue(mDriverLocation.getLongitude());
         } else {
-            mDatabaseRefAvailableDrivers.child(mName).setValue(null);
+            mFirebaseAvailableDrivers.child(mName).setValue(null);
         }
     }
 
     public void updateMap(){
-        mDatabaseRefAvailableDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
+        mFirebaseAvailableDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 Map<String, Object> driverLocations = (Map<String, Object>) dataSnapshot.getValue();
@@ -185,6 +207,14 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         });
     }
 
+    public void incomingRequest(DataSnapshot dataSnapshot) {
+        Log.d(DEBUG_LOG, "Incoming request");
+
+    }
+
+    public void connectedToCustomer(DataSnapshot dataSnapshot) {
+        Log.d(DEBUG_LOG, "Connected to customer");
+    }
 
     /******* GOOGLE MAP *******/
     @Override

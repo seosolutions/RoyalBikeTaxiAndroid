@@ -42,9 +42,19 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import com.ryanwhitell.royalbiketaxi.Controller.Model.DriverLocation;
 import com.ryanwhitell.royalbiketaxi.R;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Map;
+
+import android.os.Handler;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback,
@@ -56,8 +66,16 @@ public class MainActivity extends AppCompatActivity
 
     // Logic
     private boolean mBoundsDisplayed;
-    private boolean mDispatchState;
+    private enum State {
+        IDLE, REQUESTING, SEARCHING, CONNECTED, WAITING
+    }
+    private State mDispatchState;
     private int mDriverClickCounter;
+    public ArrayList<DriverLocation> mDriverLocations;
+    // Runnable and Handler
+    private int mNumberOfDrivers;
+    private int mIndex;
+    private Handler mHandler;
 
     // Alerts
     private AlertDialog.Builder mConfirmDispatchAlert;
@@ -69,9 +87,12 @@ public class MainActivity extends AppCompatActivity
     private GoogleApiClient mGoogleApiClient;
     private Polygon mBounds;
     private Marker mLocationMarker;
+    private Location mLastKnownLocation;
 
     // Firebase database
-    private DatabaseReference mDatabaseRefRequestDispatch;
+    private DatabaseReference mFirebaseUserDispatchRequest;
+    private DatabaseReference mFirebaseAvailableDrivers;
+    private DatabaseReference mFirebaseLocationRequest;
     private String mDispatchRequestKey;
 
     // Navigation
@@ -82,7 +103,7 @@ public class MainActivity extends AppCompatActivity
 
     /******* ACTIVITY LIFECYCLE *******/
     //TODO: Keep from sleeping, changing state in any way
-    // are tou sure you want to navigate away from page
+    //TODO: REMOVE EVENT LISTENERS ON ACTIVITY CHANGE removeEventListener()
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -91,7 +112,8 @@ public class MainActivity extends AppCompatActivity
         // Initialize Logic
         mBoundsDisplayed = false;
         mDriverClickCounter = 1;
-        mDispatchState = false;
+        mDispatchState = State.IDLE;
+        mDriverLocations = new ArrayList<>();
 
         // Initialize Alerts
         mConfirmDispatchAlert = new AlertDialog.Builder(this)
@@ -168,7 +190,51 @@ public class MainActivity extends AppCompatActivity
 
         // Initialize Database
         FirebaseDatabase database = FirebaseDatabase.getInstance();
-        mDatabaseRefRequestDispatch = database.getReference("Dispatch Request");
+        mFirebaseAvailableDrivers = database.getReference("Available Drivers");
+
+        mFirebaseLocationRequest = database.getReference("Location Request");
+
+        mFirebaseUserDispatchRequest = database.getReference("Dispatch Request");
+        mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if (mDispatchState == State.REQUESTING) {
+                    if (dataSnapshot.getValue() != null) {
+                        Map<String, Object> dispatchRequests = (Map<String, Object>) dataSnapshot.getValue();
+                        for (Map.Entry<String, Object> request : dispatchRequests.entrySet()) {
+                            if (request.getKey().equals(mDispatchRequestKey)) {
+                                // 8. Sort available drivers by closest
+                                Log.d(DEBUG_LOG, "8. Sort available drivers by closest");
+                                Collections.sort(mDriverLocations);
+
+                                // 9. Change dispatch state to "Searching and contacting nearest driver"
+                                Log.d(DEBUG_LOG, "9. Change dispatch state to \"Searching and contacting nearest driver\"");
+                                mDispatchState = State.SEARCHING;
+
+                                // 10. Find and contact nearest driver
+                                Log.d(DEBUG_LOG, "10. Find and contact nearest driver");
+                                searchForDriver();
+                            }
+                        }
+                    }
+                } else if (mDispatchState == State.SEARCHING) {
+                    if (dataSnapshot.getValue() != null) {
+                        Map<String, Object> dispatchRequests = (Map<String, Object>) dataSnapshot.getValue();
+                        for (Map.Entry<String, Object> request : dispatchRequests.entrySet()) {
+                            if (request.getKey().equals(mDispatchRequestKey)) {
+                                // 12 B. Check that the driver has connected and update the state
+                                Log.d(DEBUG_LOG, "12 B. Check that the driver has connected and update the state");
+                            }
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                //TODO: Handle
+            }
+        });
 
         // Initialize Google Api - Location, Map
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -266,7 +332,9 @@ public class MainActivity extends AppCompatActivity
     }
 
 
+
     /******* USER DISPATCH LOGIC *******/
+    // Request a dispatch
     public void onClickFab(View view){
         if (withinBounds()) {
             mConfirmDispatchAlert.create();
@@ -279,23 +347,140 @@ public class MainActivity extends AppCompatActivity
 
     public void confirmDispatch(int which) {
         if (which == DialogInterface.BUTTON_POSITIVE) {
-            // 1. Change dispatch state to "currently requesting a dispatch"
-            mDispatchState = true;
 
-            // 2. Hide fab and show dispatch request state views
+            // 1. Hide fab and show dispatch request state views
+            Log.d(DEBUG_LOG, "1. Hide fab and show dispatch request state views");
             mCancelDispatch.setVisibility(View.VISIBLE);
             mActivityWheel.setVisibility(View.VISIBLE);
             mFab.setVisibility(View.GONE);
             Toast.makeText(this, "Requesting a driver...", Toast.LENGTH_LONG).show();
 
-            // 3. Create a dispatch request in the database
-            mDispatchRequestKey = mDatabaseRefRequestDispatch.push().getKey();
+            // 2. Refresh all driver locations
+            Log.d(DEBUG_LOG, "2. Refresh all driver locations");
+            String key = mFirebaseLocationRequest.push().getKey();
+            mFirebaseLocationRequest.child(key).setValue("REQUEST");
+            mFirebaseLocationRequest.child(key).removeValue();
+
+            // 3. Update Driver Locations
+            Log.d(DEBUG_LOG, "3. Update Driver Locations");
+            updateDriverLocations();
+
+            // 4. Change dispatch state to "currently waiting for driver update"
+            Log.d(DEBUG_LOG, "4. Change dispatch state to \"currently waiting for driver update\"");
+            mDispatchState = State.WAITING;
         }
     }
 
+    public void updateDriverLocations(){
+
+        mFirebaseAvailableDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Map<String, Object> driverLocations = (Map<String, Object>) dataSnapshot.getValue();
+
+                mDriverLocations.clear();
+
+                // 5. Update driver locations
+                Log.d(DEBUG_LOG, "5. Update driver locations");
+                for (Map.Entry<String, Object> driver : driverLocations.entrySet()) {
+                    Double lat = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString());
+                    Double lon = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString());
+
+                    DriverLocation location = new DriverLocation(new LatLng(lat, lon), driver.getKey());
+                    location.setDistance(new LatLng(mLocationMarker.getPosition().latitude, mLocationMarker.getPosition().longitude));
+
+                    mDriverLocations.add(location);
+                }
+
+
+                // 6. Push dispatch request onto the database
+                Log.d(DEBUG_LOG, "6. Push dispatch request onto the database");
+                mDispatchRequestKey = mFirebaseUserDispatchRequest.push().getKey();
+                mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("longitude").setValue(mLastKnownLocation.getLongitude());
+                mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("latitude").setValue(mLastKnownLocation.getLatitude());
+
+                // 7. Set state to "Requesting a dispatch"
+                Log.d(DEBUG_LOG, "7. Set state to \"Requesting a dispatch\"");
+                mDispatchState = State.REQUESTING;
+
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                //TODO: handle
+            }
+        });
+    }
+
+    public void searchForDriver() {
+
+        if (mDispatchState == State.SEARCHING) {
+
+            mNumberOfDrivers = mDriverLocations.size();
+            mIndex = 0;
+            mHandler = new Handler();
+
+            Runnable waitForResponse = new Runnable() {
+                @Override
+                public void run() {
+                    if (mIndex < mNumberOfDrivers-1) {
+                        // 12 A. Check to see if the driver has responded, else try the next on the list
+                        Log.d(DEBUG_LOG, "12 A. Check to see if the driver has responded, else try the next on the list");
+
+                        if (mDispatchState == State.CONNECTED) {
+                            // 13 A. Driver has responded, connect to driver
+                            Log.d(DEBUG_LOG, "13 A. Driver has responded, connect to driver");
+                        } else {
+                            // 13 B1. Driver has not responded, request next closest driver
+                            Log.d(DEBUG_LOG, "13 B1. Driver has not responded, request next closest driver");
+                            mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
+                            mIndex++;
+                            mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").setValue(mDispatchRequestKey);
+                            mHandler.postDelayed(this, 10000);
+                        }
+
+                    } else {
+                        // 13 B2. No drivers are currently available
+                        Log.d(DEBUG_LOG, "13 B2. No drivers are currently available");
+                        mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
+                    }
+                }
+            };
+
+            // 11. Request nearest driver and provide 10 seconds for response
+            if (mDriverLocations.get(mIndex) != null) {
+                Log.d(DEBUG_LOG, "11. Request nearest driver and provide 10 seconds for response");
+                mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").setValue(mDispatchRequestKey);
+                mHandler.postDelayed(waitForResponse, 10000);
+            } else {
+                // TODO: Handle errors
+            }
+
+        }
+
+
+//        if (mDriverLocations.get(0) != null) {
+//            mFirebaseAvailableDrivers.child(mDriverLocations.get(0).name).child("Request").setValue(mDispatchRequestKey);
+//        }
+//
+//        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Driver").addValueEventListener(new ValueEventListener() {
+//            @Override
+//            public void onDataChange(DataSnapshot dataSnapshot) {
+//                Log.d(DEBUG_LOG, "HANDSHAKED");
+//            }
+//
+//            @Override
+//            public void onCancelled(DatabaseError databaseError) {
+//
+//            }
+//        });
+
+    }
+
+    // Cancel a dispatch
     public void cancelDispatch(View view) {
         // 1. Change dispatch state to "not requesting a dispatch"
-        mDispatchState = false;
+        mDispatchState = State.IDLE;
 
         // 2. Show fab and hide dispatch request state views
         view.setVisibility(View.GONE);
@@ -309,11 +494,12 @@ public class MainActivity extends AppCompatActivity
 
     public void destroyDispatchRequest() {
         if (mDispatchRequestKey != null) {
-            mDatabaseRefRequestDispatch.child(mDispatchRequestKey).removeValue();
+            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).removeValue();
             mDispatchRequestKey = null;
         }
     }
 
+    // Boundaries Logic
     public boolean withinBounds() {
 
         // Savannah Bike Taxi operating boundaries
@@ -410,6 +596,8 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onLocationChanged(Location location) {
 
+        mLastKnownLocation = location;
+
         if (mLocationMarker != null) {
             mLocationMarker.remove();
         }
@@ -419,7 +607,7 @@ public class MainActivity extends AppCompatActivity
                 .title("My Location")
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
         
-        if (mDispatchState) {
+        if (mDispatchState == State.CONNECTED) {
             trackUserLocation(location);
         }
     }
@@ -431,6 +619,8 @@ public class MainActivity extends AppCompatActivity
     }
 
     public void trackUserLocation(Location location) {
-        mDatabaseRefRequestDispatch.child(mDispatchRequestKey).setValue(location);
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("longitude").setValue(location.getLongitude());
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("latitude").setValue(location.getLatitude());
+        Log.d(DEBUG_LOG, "Tracking users location");
     }
 }
