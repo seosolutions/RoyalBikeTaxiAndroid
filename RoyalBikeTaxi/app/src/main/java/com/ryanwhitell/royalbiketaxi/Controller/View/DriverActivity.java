@@ -45,7 +45,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
     // Driver Information
     private String mName;
-    private boolean mAvailable;
+    private String mNumber;
     private Location mDriverLocation;
 
     // Firebase
@@ -54,6 +54,12 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     private DatabaseReference mFirebaseDriverDispatchRequest;
     private DatabaseReference mFirebaseUserDispatchRequest;
     private String mDispatchRequestKey;
+
+    //Flow Control
+    private enum State {
+        AVAILABLE, UNAVAILABLE
+    }
+    private State mDispatchState;
 
     // Google Api - Location, Map
     private GoogleMap mMap;
@@ -68,12 +74,11 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         setContentView(R.layout.activity_driver);
 
         /******** Initialize Driver Information *******/
-        mAvailable = true;
+        mDispatchState = State.AVAILABLE;
 
         Intent intent = getIntent();
         mName = intent.getStringExtra("name");
-
-        mDriverLocation = null;
+        mNumber = intent.getStringExtra("number");
 
 
         /******* Initialize Navigation *******/
@@ -172,9 +177,10 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     public void driverLocationRequestReceived() {
         Log.d(DEBUG_LOG, "My Location was requested - connect");
         mGoogleApiClient.connect();
-        if ((mDriverLocation != null) && mAvailable) {
+        if ((mDriverLocation != null) && (mDispatchState == State.AVAILABLE)) {
             mFirebaseAvailableDrivers.child(mName).child("latitude").setValue(mDriverLocation.getLatitude());
             mFirebaseAvailableDrivers.child(mName).child("longitude").setValue(mDriverLocation.getLongitude());
+            mFirebaseAvailableDrivers.child(mName).child("phone number").setValue(mNumber);
         } else {
             mFirebaseAvailableDrivers.child(mName).setValue(null);
         }
@@ -193,10 +199,12 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                     if (driver.getKey() != mName) {
                         Double lat = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString());
                         Double lon = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString());
+                        String number = ((Map<String, Object>) driver.getValue()).get("phone number").toString();
 
                         mMap.addMarker(new MarkerOptions()
                                 .position(new LatLng(lat, lon))
                                 .title(driver.getKey().toString())
+                                .snippet(number)
                                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
                     }
                 }

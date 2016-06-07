@@ -56,11 +56,13 @@ public class LoginActivity extends AppCompatActivity {
         EditText ePass = (EditText) findViewById(R.id.text_view_password);
         String name = eName.getText().toString();
         String pass = ePass.getText().toString();
+        String number = getNumber(name);
 
         if (checkName(name)) {
-            if (checkPassword(pass)) {
+            if (checkPassword(pass, name)) {
                 Intent intent = new Intent(this, DriverActivity.class);
                 intent.putExtra("name", name);
+                intent.putExtra("number", number);
                 startActivity(intent);
             } else {
                 Toast.makeText(this, "Invalid Password", Toast.LENGTH_LONG).show();
@@ -79,13 +81,22 @@ public class LoginActivity extends AppCompatActivity {
         return false;
     }
 
-    public boolean checkPassword(String pass) {
+    public boolean checkPassword(String pass, String name) {
         for (Driver driver : mDrivers) {
-            if (pass.equals(driver.getPassword())) {
+            if ((pass.equals(driver.getPassword())) && (name.equals(driver.getName()))) {
                 return true;
             }
         }
         return false;
+    }
+
+    public String getNumber(String name) {
+        for (Driver driver : mDrivers) {
+            if (name.equals(driver.getName())) {
+                return driver.getNumber();
+            }
+        }
+        return "0000000000";
     }
 
 }
