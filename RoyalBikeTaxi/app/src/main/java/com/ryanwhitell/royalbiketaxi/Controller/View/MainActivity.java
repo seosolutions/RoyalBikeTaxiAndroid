@@ -64,23 +64,24 @@ public class MainActivity extends AppCompatActivity
     /******* VARIABLES *******/
     private final String DEBUG_LOG = "RBT Debug Log";
 
-    // Logic
+    // Alerts
+    private AlertDialog.Builder mConfirmDispatchAlert;
+    private AlertDialog.Builder mOutOfBoundsAlert;
+    private ProgressBar mActivityWheel;
+
+    // Firebase
+    private DatabaseReference mFirebaseUserDispatchRequest;
+    private DatabaseReference mFirebaseAvailableDrivers;
+    private DatabaseReference mFirebaseLocationRequest;
+    private String mDispatchRequestKey;
+
+    // Flow Control
     private boolean mBoundsDisplayed;
     private enum State {
         IDLE, REQUESTING, SEARCHING, CONNECTED, WAITING
     }
     private State mDispatchState;
     private int mDriverClickCounter;
-    public ArrayList<DriverLocation> mDriverLocations;
-    // Runnable and Handler
-    private int mNumberOfDrivers;
-    private int mIndex;
-    private Handler mHandler;
-
-    // Alerts
-    private AlertDialog.Builder mConfirmDispatchAlert;
-    private AlertDialog.Builder mOutOfBoundsAlert;
-    private ProgressBar mActivityWheel;
 
     // Google Api - Location, Map
     private GoogleMap mMap;
@@ -88,17 +89,16 @@ public class MainActivity extends AppCompatActivity
     private Polygon mBounds;
     private Marker mLocationMarker;
     private Location mLastKnownLocation;
-
-    // Firebase database
-    private DatabaseReference mFirebaseUserDispatchRequest;
-    private DatabaseReference mFirebaseAvailableDrivers;
-    private DatabaseReference mFirebaseLocationRequest;
-    private String mDispatchRequestKey;
+    public ArrayList<DriverLocation> mDriverLocations;
 
     // Navigation
     private Button mCancelDispatch;
     private FloatingActionButton mFab;
 
+    // Runnable and Handler
+    private int mNumberOfDrivers;
+    private int mIndex;
+    private Handler mHandler;
 
 
     /******* ACTIVITY LIFECYCLE *******/
@@ -109,13 +109,8 @@ public class MainActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initialize Logic
-        mBoundsDisplayed = false;
-        mDriverClickCounter = 1;
-        mDispatchState = State.IDLE;
-        mDriverLocations = new ArrayList<>();
 
-        // Initialize Alerts
+        /******* Initialize Alerts *******/
         mConfirmDispatchAlert = new AlertDialog.Builder(this)
                 .setTitle("Confirm Dispatch to My Location")
                 .setMessage(
@@ -158,7 +153,50 @@ public class MainActivity extends AppCompatActivity
                     }
                 });
 
-        // Initialize Navigation
+
+        /******* Initialize Firebase *******/
+        FirebaseDatabase database = FirebaseDatabase.getInstance();
+        mFirebaseAvailableDrivers = database.getReference("Available Drivers");
+
+        mFirebaseLocationRequest = database.getReference("Location Request");
+
+        mFirebaseUserDispatchRequest = database.getReference("Dispatch Request");
+        mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                driverHandshake(dataSnapshot);
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                //TODO: Handle
+            }
+        });
+
+
+        /******* Initialize Flow Control *******/
+        mBoundsDisplayed = false;
+        mDriverClickCounter = 1;
+        mDispatchState = State.IDLE;
+
+
+        /******* Initialize Google Api - Location, Map *******/
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.map);
+        mapFragment.getMapAsync(this);
+
+        mDriverLocations = new ArrayList<>();
+
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(LocationServices.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
+        mGoogleApiClient.connect();
+
+
+        /******* Initialize Navigation *******/
         mCancelDispatch = (Button) findViewById(R.id.cancel__dispatch_button);
         assert mCancelDispatch != null;
         mCancelDispatch.setVisibility(View.GONE);
@@ -187,66 +225,6 @@ public class MainActivity extends AppCompatActivity
         NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
         assert navigationView != null;
         navigationView.setNavigationItemSelectedListener(this);
-
-        // Initialize Database
-        FirebaseDatabase database = FirebaseDatabase.getInstance();
-        mFirebaseAvailableDrivers = database.getReference("Available Drivers");
-
-        mFirebaseLocationRequest = database.getReference("Location Request");
-
-        mFirebaseUserDispatchRequest = database.getReference("Dispatch Request");
-        mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                if (mDispatchState == State.REQUESTING) {
-                    if (dataSnapshot.getValue() != null) {
-                        Map<String, Object> dispatchRequests = (Map<String, Object>) dataSnapshot.getValue();
-                        for (Map.Entry<String, Object> request : dispatchRequests.entrySet()) {
-                            if (request.getKey().equals(mDispatchRequestKey)) {
-                                // 8. Sort available drivers by closest
-                                Log.d(DEBUG_LOG, "8. Sort available drivers by closest");
-                                Collections.sort(mDriverLocations);
-
-                                // 9. Change dispatch state to "Searching and contacting nearest driver"
-                                Log.d(DEBUG_LOG, "9. Change dispatch state to \"Searching and contacting nearest driver\"");
-                                mDispatchState = State.SEARCHING;
-
-                                // 10. Find and contact nearest driver
-                                Log.d(DEBUG_LOG, "10. Find and contact nearest driver");
-                                searchForDriver();
-                            }
-                        }
-                    }
-                } else if (mDispatchState == State.SEARCHING) {
-                    if (dataSnapshot.getValue() != null) {
-                        Map<String, Object> dispatchRequests = (Map<String, Object>) dataSnapshot.getValue();
-                        for (Map.Entry<String, Object> request : dispatchRequests.entrySet()) {
-                            if (request.getKey().equals(mDispatchRequestKey)) {
-                                // 12 B. Check that the driver has connected and update the state
-                                Log.d(DEBUG_LOG, "12 B. Check that the driver has connected and update the state");
-                            }
-                        }
-                    }
-                }
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-                //TODO: Handle
-            }
-        });
-
-        // Initialize Google Api - Location, Map
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.map);
-        mapFragment.getMapAsync(this);
-
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addApi(LocationServices.API)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .build();
-        mGoogleApiClient.connect();
     }
 
     @Override
@@ -428,8 +406,8 @@ public class MainActivity extends AppCompatActivity
                         Log.d(DEBUG_LOG, "12 A. Check to see if the driver has responded, else try the next on the list");
 
                         if (mDispatchState == State.CONNECTED) {
-                            // 13 A. Driver has responded, connect to driver
-                            Log.d(DEBUG_LOG, "13 A. Driver has responded, connect to driver");
+                            // 15. Connected to driver, quit runnable
+                            Log.d(DEBUG_LOG, "15. Connected to driver, quit runnable");
                         } else {
                             // 13 B1. Driver has not responded, request next closest driver
                             Log.d(DEBUG_LOG, "13 B1. Driver has not responded, request next closest driver");
@@ -477,6 +455,54 @@ public class MainActivity extends AppCompatActivity
 
     }
 
+    public void driverHandshake(DataSnapshot dataSnapshot){
+        if (mDispatchState == State.REQUESTING) {
+            if (dataSnapshot.getValue() != null) {
+                Map<String, Object> dispatchRequests = (Map<String, Object>) dataSnapshot.getValue();
+                for (Map.Entry<String, Object> request : dispatchRequests.entrySet()) {
+                    if (request.getKey().equals(mDispatchRequestKey)) {
+                        // 8. Sort available drivers by closest
+                        Log.d(DEBUG_LOG, "8. Sort available drivers by closest");
+                        Collections.sort(mDriverLocations);
+
+                        // 9. Change dispatch state to "Searching and contacting nearest driver"
+                        Log.d(DEBUG_LOG, "9. Change dispatch state to \"Searching and contacting nearest driver\"");
+                        mDispatchState = State.SEARCHING;
+
+                        // 10. Find and contact nearest driver
+                        Log.d(DEBUG_LOG, "10. Find and contact nearest driver");
+                        searchForDriver();
+                    }
+                }
+            }
+        } else if (mDispatchState == State.SEARCHING) {
+            if (dataSnapshot.getValue() != null) {
+                Map<String, Object> dispatchRequests = (Map<String, Object>) dataSnapshot.getValue();
+                Map<String, Object> dispatchRequest = (Map<String, Object>) dispatchRequests.get(mDispatchRequestKey);
+                for (Map.Entry<String, Object> request : dispatchRequest.entrySet()) {
+                    if (request.getKey().equals("Connect to")) {
+                        // 14. Driver has responded, send connect request, update state to "connected"
+                        Log.d(DEBUG_LOG, "14. Driver has responded, send connect request, update state to \"connected\"");
+                        String driverName = request.getValue().toString();
+                        mFirebaseAvailableDrivers.child(driverName).child("Dispatch Request").setValue("Connected");
+                        mDispatchState = State.CONNECTED;
+                    }
+                }
+
+//                for (Map.Entry<String, Object> request : dispatchRequests.entrySet()) {
+//                    if (request.getKey().equals(mDispatchRequestKey)) {
+//                        // 12 B. Check that the driver has connected and update the state
+//                        Log.d(DEBUG_LOG, "12 B. Check that the driver has connected and update the state");
+//                        if (request.getValue() != null) {
+//                            String driverName = request.getValue().toString();
+//                            mFirebaseAvailableDrivers.child(driverName).child("Dispatch Request").setValue("CONNECTED");
+//                        }
+//                    }
+//                }
+            }
+        }
+    }
+
     // Cancel a dispatch
     public void cancelDispatch(View view) {
         // 1. Change dispatch state to "not requesting a dispatch"
@@ -499,7 +525,7 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    // Boundaries Logic
+    // Boundaries logic
     public boolean withinBounds() {
 
         // Savannah Bike Taxi operating boundaries

@@ -43,21 +43,22 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     /******* VARIABLES *******/
     private final String DEBUG_LOG = "RBT Debug Log";
 
+    // Driver Information
+    private String mName;
+    private boolean mAvailable;
+    private Location mDriverLocation;
+
+    // Firebase
+    private DatabaseReference mFirebaseAvailableDrivers;
+    private DatabaseReference mFirebaseLocationRequest;
+    private DatabaseReference mFirebaseDriverDispatchRequest;
+    private DatabaseReference mFirebaseUserDispatchRequest;
+    private String mDispatchRequestKey;
+
     // Google Api - Location, Map
     private GoogleMap mMap;
     private GoogleApiClient mGoogleApiClient;
     private Marker mLocationMarker;
-
-    // Firebase database
-    private DatabaseReference mFirebaseAvailableDrivers;
-    private DatabaseReference mFirebaseLocationRequest;
-    private DatabaseReference mFirebaseDriverDispatchRequest;
-    private String mDispatchRequestKey;
-
-    // Driver info
-    private String mName;
-    private boolean mAvailable;
-    private Location mDriverLocation;
 
 
     /******* ACTIVITY LIFECYCLE *******/
@@ -66,7 +67,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_driver);
 
-        // Initialize driver info
+        /******** Initialize Driver Information *******/
         mAvailable = true;
 
         Intent intent = getIntent();
@@ -74,7 +75,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
         mDriverLocation = null;
 
-        // Initialize Navigation
+
+        /******* Initialize Navigation *******/
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         toolbar.setTitle("You are logged in as " + mName);
         setSupportActionBar(toolbar);
@@ -89,16 +91,17 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             }
         });
 
-        // Initialize database
+
+        /******* Initialize Firebase *******/
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         mFirebaseAvailableDrivers = database.getReference("Available Drivers");
-
+        mFirebaseUserDispatchRequest = database.getReference("Dispatch Request");
         mFirebaseDriverDispatchRequest = database.getReference("Available Drivers").child(mName).child("Dispatch Request");
         mFirebaseDriverDispatchRequest.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.getValue() != null) {
-                    if (dataSnapshot.getValue().equals("CONNECTED")) {
+                    if (dataSnapshot.getValue().equals("Connected")) {
                         connectedToCustomer(dataSnapshot);
                     } else {
                         incomingRequest(dataSnapshot);
@@ -112,7 +115,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             }
         });
 
-        // Initialize Google Api - Location, Map
+
+        /******* Initialize Google Api - Location, Map *******/
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
@@ -208,12 +212,14 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     }
 
     public void incomingRequest(DataSnapshot dataSnapshot) {
-        Log.d(DEBUG_LOG, "Incoming request");
-
+        // if accepted
+        mDispatchRequestKey = dataSnapshot.getValue().toString();
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connect to").setValue(mName);
     }
 
     public void connectedToCustomer(DataSnapshot dataSnapshot) {
-        Log.d(DEBUG_LOG, "Connected to customer");
+        // connected
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue(mName);
     }
 
     /******* GOOGLE MAP *******/
