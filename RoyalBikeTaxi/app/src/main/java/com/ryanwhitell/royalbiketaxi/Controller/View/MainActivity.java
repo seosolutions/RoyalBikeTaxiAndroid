@@ -88,6 +88,7 @@ public class MainActivity extends AppCompatActivity
     private GoogleApiClient mGoogleApiClient;
     private Polygon mBounds;
     private Marker mLocationMarker;
+    private Marker mDriverLocationMarker;
     private Location mLastKnownLocation;
     public ArrayList<DriverLocation> mDriverLocations;
 
@@ -402,15 +403,16 @@ public class MainActivity extends AppCompatActivity
                 @Override
                 public void run() {
                     if (mIndex < mNumberOfDrivers-1) {
-                        // 12 A. Check to see if the driver has responded, else try the next on the list
-                        Log.d(DEBUG_LOG, "12 A. Check to see if the driver has responded, else try the next on the list");
+                        // 12 B. Check to see if the driver has responded, else try the next on the list
+                        Log.d(DEBUG_LOG, "12 B. Check to see if the driver has responded, else try the next on the list");
 
                         if (mDispatchState == State.CONNECTED) {
-                            // 15. Connected to driver, quit runnable
-                            Log.d(DEBUG_LOG, "15. Connected to driver, quit runnable");
+                            // 13. Connected to driver, quit runnable, track driver
+                            Log.d(DEBUG_LOG, "13. Connected to driver, quit runnable");
+                            trackDriver();
                         } else {
-                            // 13 B1. Driver has not responded, request next closest driver
-                            Log.d(DEBUG_LOG, "13 B1. Driver has not responded, request next closest driver");
+                            // 12 C1. Driver has not responded, request next closest driver
+                            Log.d(DEBUG_LOG, "12 C1. Driver has not responded, request next closest driver");
                             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
                             mIndex++;
                             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").setValue(mDispatchRequestKey);
@@ -418,8 +420,8 @@ public class MainActivity extends AppCompatActivity
                         }
 
                     } else {
-                        // 13 B2. No drivers are currently available
-                        Log.d(DEBUG_LOG, "13 B2. No drivers are currently available");
+                        // 12 C2. No drivers are currently available
+                        Log.d(DEBUG_LOG, "12 C2. No drivers are currently available");
                         mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
                     }
                 }
@@ -435,24 +437,6 @@ public class MainActivity extends AppCompatActivity
             }
 
         }
-
-
-//        if (mDriverLocations.get(0) != null) {
-//            mFirebaseAvailableDrivers.child(mDriverLocations.get(0).name).child("Request").setValue(mDispatchRequestKey);
-//        }
-//
-//        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Driver").addValueEventListener(new ValueEventListener() {
-//            @Override
-//            public void onDataChange(DataSnapshot dataSnapshot) {
-//                Log.d(DEBUG_LOG, "HANDSHAKED");
-//            }
-//
-//            @Override
-//            public void onCancelled(DatabaseError databaseError) {
-//
-//            }
-//        });
-
     }
 
     public void driverHandshake(DataSnapshot dataSnapshot){
@@ -480,27 +464,44 @@ public class MainActivity extends AppCompatActivity
                 Map<String, Object> dispatchRequests = (Map<String, Object>) dataSnapshot.getValue();
                 Map<String, Object> dispatchRequest = (Map<String, Object>) dispatchRequests.get(mDispatchRequestKey);
                 for (Map.Entry<String, Object> request : dispatchRequest.entrySet()) {
-                    if (request.getKey().equals("Connect to")) {
-                        // 14. Driver has responded, send connect request, update state to "connected"
-                        Log.d(DEBUG_LOG, "14. Driver has responded, send connect request, update state to \"connected\"");
+                    if (request.getKey().equals("Connected")) {
+                        // 12 A. Driver has responded, send connect request, update state to "connected"
+                        Log.d(DEBUG_LOG, "12 A. Driver has responded, send connect request, update state to \"connected\"");
                         String driverName = request.getValue().toString();
                         mFirebaseAvailableDrivers.child(driverName).child("Dispatch Request").setValue("Connected");
                         mDispatchState = State.CONNECTED;
                     }
                 }
-
-//                for (Map.Entry<String, Object> request : dispatchRequests.entrySet()) {
-//                    if (request.getKey().equals(mDispatchRequestKey)) {
-//                        // 12 B. Check that the driver has connected and update the state
-//                        Log.d(DEBUG_LOG, "12 B. Check that the driver has connected and update the state");
-//                        if (request.getValue() != null) {
-//                            String driverName = request.getValue().toString();
-//                            mFirebaseAvailableDrivers.child(driverName).child("Dispatch Request").setValue("CONNECTED");
-//                        }
-//                    }
-//                }
             }
         }
+    }
+
+    // Connected to dispatch
+    public void trackDriver() {
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Map<String, Object> driverInfo = (Map<String, Object>) dataSnapshot.getValue();
+
+                if (mDriverLocationMarker != null) {
+                    mDriverLocationMarker.remove();
+                }
+
+                // 14 A. Tracking driver...
+                Log.d(DEBUG_LOG, "14 A. Tracking driver...");
+
+                mDriverLocationMarker = mMap.addMarker(new MarkerOptions()
+                        .position(new LatLng((Double) driverInfo.get("latitude"), (Double) driverInfo.get("longitude")))
+                        .title((String) driverInfo.get("name"))
+                        .snippet((String) driverInfo.get("number"))
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
     }
 
     // Cancel a dispatch
@@ -645,8 +646,10 @@ public class MainActivity extends AppCompatActivity
     }
 
     public void trackUserLocation(Location location) {
+        // 14 B. Tracking user...
+        Log.d(DEBUG_LOG, "14 B. Tracking user...");
+
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("longitude").setValue(location.getLongitude());
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("latitude").setValue(location.getLatitude());
-        Log.d(DEBUG_LOG, "Tracking users location");
     }
 }

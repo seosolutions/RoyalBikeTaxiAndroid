@@ -57,7 +57,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
     //Flow Control
     private enum State {
-        AVAILABLE, UNAVAILABLE
+        AVAILABLE, ON_DISPATCH
     }
     private State mDispatchState;
 
@@ -142,7 +142,9 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         mFirebaseLocationRequest.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                driverLocationRequestReceived();
+                if (mDispatchState == State.AVAILABLE) {
+                    driverLocationRequestReceived();
+                }
             }
 
             @Override
@@ -150,7 +152,6 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                 // TODO: handle
             }
         });
-
     }
 
     @Override
@@ -222,13 +223,19 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     public void incomingRequest(DataSnapshot dataSnapshot) {
         // if accepted
         mDispatchRequestKey = dataSnapshot.getValue().toString();
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connect to").setValue(mName);
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue(mName);
     }
 
     public void connectedToCustomer(DataSnapshot dataSnapshot) {
         // connected
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue(mName);
+        mFirebaseAvailableDrivers.child(mName).removeValue();
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").removeValue();
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("name").setValue(mName);
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("number").setValue(mNumber);
+        mDispatchState = State.ON_DISPATCH;
+        mGoogleApiClient.connect();
     }
+
 
     /******* GOOGLE MAP *******/
     @Override
@@ -296,16 +303,28 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
         mDriverLocation = location;
 
-        Log.d(DEBUG_LOG, "Location Set - Disconnected");
+        if (mDispatchState == State.AVAILABLE) {
+            mGoogleApiClient.disconnect();
+        } else if (mDispatchState == State.ON_DISPATCH) {
+            trackDriverLocation(location);
+        }
 
-        // Only fire once on each connect
-        mGoogleApiClient.disconnect();
     }
 
     @Override
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
         //TODO: Handle Failed Connection
         Log.d(DEBUG_LOG,"onConnectionFailed Fired");
+    }
+
+    public void trackDriverLocation(Location location) {
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver")
+                .child("latitude")
+                .setValue(location.getLatitude());
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver")
+                .child("longitude")
+                .setValue(location.getLongitude());
+
     }
 
 }
