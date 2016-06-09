@@ -22,6 +22,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.Toast;
@@ -115,19 +116,19 @@ public class MainActivity extends AppCompatActivity
         mConfirmDispatchAlert = new AlertDialog.Builder(this)
                 .setTitle("Confirm Dispatch to My Location")
                 .setMessage(
-                        "By clicking 'CONFIRM' you agree " +
+                        "By clicking CONFIRM you agree " +
                                 "to accepting a ride from our nearest " +
                                 "driver. A bike will be dispatched to your " +
                                 "location, please wait in a convenient pickup " +
                                 "location and do not navigate away " +
                                 "from the current screen. Thank you!")
-                .setPositiveButton("Confirm", new DialogInterface.OnClickListener() {
+                .setPositiveButton("CONFIRM", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         confirmDispatch(which);
                     }
                 })
-                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                .setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         confirmDispatch(which);
@@ -140,14 +141,14 @@ public class MainActivity extends AppCompatActivity
                         "You are currently trying to request " +
                                 "a dispatch outside of our " +
                                 "operating boundaries. To view boundaries, click " +
-                                "'TOGGLE BOUNDS'")
-                .setPositiveButton("Toggle Bounds", new DialogInterface.OnClickListener() {
+                                "TOGGLE BOUNDS")
+                .setPositiveButton("TOGGLE BOUND", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         toggleBoundaries(true);
                     }
                 })
-                .setNegativeButton("Back", new DialogInterface.OnClickListener() {
+                .setNegativeButton("BACK", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         toggleBoundaries(false);
@@ -241,6 +242,13 @@ public class MainActivity extends AppCompatActivity
         destroyDispatchRequest();
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mGoogleApiClient.disconnect();
+        destroyDispatchRequest();
+    }
+
 
     /******* NAVIGATION *******/
     @Override
@@ -327,11 +335,12 @@ public class MainActivity extends AppCompatActivity
     public void confirmDispatch(int which) {
         if (which == DialogInterface.BUTTON_POSITIVE) {
 
-            // 1. Hide fab and show dispatch request state views
-            Log.d(DEBUG_LOG, "1. Hide fab and show dispatch request state views");
+            // 1. Hide fab and show dispatch request state views, prevent device sleep
+            Log.d(DEBUG_LOG, "1. Hide fab and show dispatch request state views, prevent device sleep");
             mCancelDispatch.setVisibility(View.VISIBLE);
             mActivityWheel.setVisibility(View.VISIBLE);
             mFab.setVisibility(View.GONE);
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             Toast.makeText(this, "Requesting a driver...", Toast.LENGTH_LONG).show();
 
             // 2. Refresh all driver locations

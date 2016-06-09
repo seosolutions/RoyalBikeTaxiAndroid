@@ -1,6 +1,7 @@
 package com.ryanwhitell.royalbiketaxi.Controller.View;
 
 import android.Manifest;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
@@ -9,6 +10,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.ActivityCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -43,6 +45,9 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     /******* VARIABLES *******/
     private final String DEBUG_LOG = "RBT Debug Log";
 
+    // Alerts
+    private AlertDialog.Builder mIncomingDispatchAlert;
+
     // Driver Information
     private String mName;
     private String mNumber;
@@ -72,6 +77,26 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_driver);
+
+        /******* Initialize Alerts *******/
+        mIncomingDispatchAlert = new AlertDialog.Builder(this)
+                .setTitle("Accept Incoming Dispatch")
+                .setMessage(
+                        "You have 10 seconds to accept the incoming " +
+                                "dispatch. Please ACCEPT or DECLINE.")
+                .setPositiveButton("ACCEPT", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        incomingDispatchAlert(dialog, which);
+                    }
+                })
+                .setNegativeButton("DECLINE", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        incomingDispatchAlert(dialog, which);
+                    }
+                });
+
 
         /******** Initialize Driver Information *******/
         mDispatchState = State.AVAILABLE;
@@ -109,7 +134,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                     if (dataSnapshot.getValue().equals("Connected")) {
                         connectedToCustomer(dataSnapshot);
                     } else {
-                        incomingRequest(dataSnapshot);
+                        mDispatchRequestKey = dataSnapshot.getValue().toString();
+                        mIncomingDispatchAlert.create().show();
                     }
                 }
             }
@@ -167,6 +193,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
 
     /******* DRIVER LOGIC *******/
+    // Updating Driver Map
     public void requestDriverLocations() {
         Log.d(DEBUG_LOG, "I have requested all driver locations");
         String key = mFirebaseLocationRequest.push().getKey();
@@ -220,10 +247,15 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         });
     }
 
-    public void incomingRequest(DataSnapshot dataSnapshot) {
-        // if accepted
-        mDispatchRequestKey = dataSnapshot.getValue().toString();
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue(mName);
+    // Dispatch Logic
+    public void incomingDispatchAlert(DialogInterface dialog, int which) {
+        if (which == dialog.BUTTON_POSITIVE) {
+            Log.d(DEBUG_LOG, "accept");
+            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue(mName);
+        } else if (which == dialog.BUTTON_NEGATIVE) {
+            Log.d(DEBUG_LOG, "decline");
+            mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").removeValue();
+        }
     }
 
     public void connectedToCustomer(DataSnapshot dataSnapshot) {
