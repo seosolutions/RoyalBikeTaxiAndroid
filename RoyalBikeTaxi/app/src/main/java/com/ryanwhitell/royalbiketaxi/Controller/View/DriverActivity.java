@@ -87,13 +87,13 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                 .setPositiveButton("ACCEPT", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        incomingDispatchAlert(dialog, which);
+                        incomingDispatchAlert(which);
                     }
                 })
                 .setNegativeButton("DECLINE", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        incomingDispatchAlert(dialog, which);
+                        incomingDispatchAlert(which);
                     }
                 });
 
@@ -248,11 +248,11 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     }
 
     // Dispatch Logic
-    public void incomingDispatchAlert(DialogInterface dialog, int which) {
-        if (which == dialog.BUTTON_POSITIVE) {
+    public void incomingDispatchAlert(int which) {
+        if (which == DialogInterface.BUTTON_POSITIVE) {
             Log.d(DEBUG_LOG, "accept");
             mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue(mName);
-        } else if (which == dialog.BUTTON_NEGATIVE) {
+        } else if (which == DialogInterface.BUTTON_NEGATIVE) {
             Log.d(DEBUG_LOG, "decline");
             mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").removeValue();
         }
