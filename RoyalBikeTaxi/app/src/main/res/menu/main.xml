@@ -5,4 +5,8 @@
         android:title="@string/action_toggle_bounds"
         android:orderInCategory="100"
         app:showAsAction="never" />
+    <item android:id="@+id/action_refresh_drivers"
+        android:title="Refresh Driver Locations"
+        android:orderInCategory="99"
+        app:showAsAction="never" />
 </menu>

@@ -63,9 +63,15 @@ public class MainActivity extends AppCompatActivity
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
     //TODO: supress all unchecked casts @SuppressWarnings("unchecked")
+    //TODO: remove all event listeners
 
     /******* VARIABLES *******/
-    private final String DEBUG_LOG = "RBT Debug Log";
+    // Debugging
+    private final String DEBUG_REQUEST_DISPATCH = "Request Dispatch";
+    private final String DEBUG_DRIVER_LOCATIONS = "Request Locations";
+    private final String DEBUG_ON_CONNECTED = "Connected";
+    private final String DEBUG_ON_CANCEL = "Cancelled";
+    private final String DEBUG_ACTIVITY_LC = "Lifecycle";
 
     // Alerts
     private AlertDialog.Builder mConfirmDispatchAlert;
@@ -100,6 +106,7 @@ public class MainActivity extends AppCompatActivity
     // Navigation
     private Button mCancelDispatch;
     private FloatingActionButton mFab;
+    private Boolean mActionBarButtonState;
 
     // Runnable, Handler, Context
     private int mNumberOfDrivers;
@@ -113,6 +120,10 @@ public class MainActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // onCreate()
+        Log.d(DEBUG_ACTIVITY_LC, "onCreate()");
+
 
         // DEBUGGING keep screen alive
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -219,6 +230,9 @@ public class MainActivity extends AppCompatActivity
         assert navigationView != null;
         navigationView.setNavigationItemSelectedListener(this);
 
+        mActionBarButtonState = true;
+
+
         /******* Context *******/
         mContext = this;
     }
@@ -226,6 +240,9 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onStart() {
         super.onStart();
+
+        // onStart()
+        Log.d(DEBUG_ACTIVITY_LC, "onStart()");
 
         // Initialize user dispatch request listener
         mUserDispatchRequestListener = mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
@@ -237,6 +254,8 @@ public class MainActivity extends AppCompatActivity
             @Override
             public void onCancelled(DatabaseError databaseError) {
                 Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 1
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 1");
                 destroyDispatchRequest();
             }
         });
@@ -249,10 +268,15 @@ public class MainActivity extends AppCompatActivity
     protected void onStop() {
         super.onStop();
 
+        // onStop()
+        Log.d(DEBUG_ACTIVITY_LC, "onStop()");
+
         // Disconnect the api client
         mGoogleApiClient.disconnect();
 
         // Destroy any dispatch requests
+        // 0 C. Dispatch cancelled from onStop()
+        Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from onStop()");
         destroyDispatchRequest();
 
         // Remove event listeners
@@ -289,6 +313,11 @@ public class MainActivity extends AppCompatActivity
         if (id == R.id.action_toggle_bounds) {
             toggleBoundaries(true);
             return true;
+        } else if ((id == R.id.action_refresh_drivers) && (mActionBarButtonState)) {
+            // 1. Refresh driver locations button press
+            Log.d(DEBUG_DRIVER_LOCATIONS, "1. Refresh driver locations button press");
+            updateMap();
+            return true;
         }
 
         return super.onOptionsItemSelected(item);
@@ -299,14 +328,12 @@ public class MainActivity extends AppCompatActivity
 
         int id = item.getItemId();
 
-        if (id == R.id.nav_book) {
-            Log.d(DEBUG_LOG, "nav_book");
-        } else if (id == R.id.nav_info) {
-            Log.d(DEBUG_LOG, "nav_info");
-        } else if (id == R.id.nav_help) {
-            Log.d(DEBUG_LOG, "nav_help");
-        } else if (id == R.id.nav_call) {
-            Log.d(DEBUG_LOG, "nav_call");
+        if (mActionBarButtonState) {
+            if (id == R.id.nav_book) {
+            } else if (id == R.id.nav_info) {
+            } else if (id == R.id.nav_help) {
+            } else if (id == R.id.nav_call) {
+            }
         }
 
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
@@ -333,8 +360,47 @@ public class MainActivity extends AppCompatActivity
     }
 
 
-
     /******* USER DISPATCH LOGIC *******/
+    // View available drivers
+    public void updateMap(){
+        mFirebaseAvailableDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                // 2. Get driver locations
+                Log.d(DEBUG_DRIVER_LOCATIONS, "2. Get driver locations");
+                Map<String, Object> driverLocations = (Map<String, Object>) dataSnapshot.getValue();
+
+                // 3. Clear current map
+                Log.d(DEBUG_DRIVER_LOCATIONS, "3. Clear current map");
+                mMap.clear();
+
+                // 4. Update my location marker
+                Log.d(DEBUG_DRIVER_LOCATIONS, "4. Update my location marker");
+                updateMyMarker(mLastKnownLocation);
+
+                // 5. Update drivers locations on map
+                Log.d(DEBUG_DRIVER_LOCATIONS, "5. Update drivers locations on map");
+                for (Map.Entry<String, Object> driver : driverLocations.entrySet()) {
+
+                    Double lat = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString());
+                    Double lon = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString());
+                    String number = ((Map<String, Object>) driver.getValue()).get("phone number").toString();
+
+                    mMap.addMarker(new MarkerOptions()
+                            .position(new LatLng(lat, lon))
+                            .title(driver.getKey().toString())
+                            .snippet(number)
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                //TODO: handle
+            }
+        });
+    }
+
     // Request a dispatch
     public void onClickFab(View view){
         //TODO: Check that is connected to internet and what not
@@ -350,26 +416,27 @@ public class MainActivity extends AppCompatActivity
     public void confirmDispatch(int which) {
         if (which == DialogInterface.BUTTON_POSITIVE) {
 
-            // 1. Hide fab and show dispatch request state views, prevent device sleep
-            Log.d(DEBUG_LOG, "1. Hide fab and show dispatch request state views, prevent device sleep");
+            // 1. Hide fab and show dispatch request state views, prevent device sleep, disable action bar buttons
+            Log.d(DEBUG_REQUEST_DISPATCH, "1. Hide fab and show dispatch request state views, prevent device sleep");
             mCancelDispatch.setVisibility(View.VISIBLE);
             mActivityWheel.setVisibility(View.VISIBLE);
             mFab.setVisibility(View.GONE);
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            Toast.makeText(this, "Requesting a driver...", Toast.LENGTH_LONG).show();
+            mActionBarButtonState = false;
+            Toast.makeText(mContext, "Locating drivers...", Toast.LENGTH_LONG).show();
 
             // 2. Refresh all driver locations
-            Log.d(DEBUG_LOG, "2. Refresh all driver locations");
+            Log.d(DEBUG_REQUEST_DISPATCH, "2. Refresh all driver locations");
             String key = mFirebaseLocationRequest.push().getKey();
             mFirebaseLocationRequest.child(key).setValue("REQUEST");
             mFirebaseLocationRequest.child(key).removeValue();
 
             // 3. Update Driver Locations
-            Log.d(DEBUG_LOG, "3. Update Driver Locations");
+            Log.d(DEBUG_REQUEST_DISPATCH, "3. Update Driver Locations");
             updateDriverLocations();
 
             // 4. Change dispatch state to "currently waiting for driver update"
-            Log.d(DEBUG_LOG, "4. Change dispatch state to \"currently waiting for driver update\"");
+            Log.d(DEBUG_REQUEST_DISPATCH, "4. Change dispatch state to \"currently waiting for driver update\"");
             mDispatchState = State.WAITING;
         }
     }
@@ -387,7 +454,7 @@ public class MainActivity extends AppCompatActivity
                     mDriverLocations.clear();
 
                     // 5. Update driver locations
-                    Log.d(DEBUG_LOG, "5. Update driver locations");
+                    Log.d(DEBUG_REQUEST_DISPATCH, "5. Update driver locations");
                     for (Map.Entry<String, Object> driver : driverLocations.entrySet()) {
                         Double lat = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString());
                         Double lon = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString());
@@ -399,13 +466,13 @@ public class MainActivity extends AppCompatActivity
                     }
 
                     // 6. Push dispatch request onto the database
-                    Log.d(DEBUG_LOG, "6. Push dispatch request onto the database");
+                    Log.d(DEBUG_REQUEST_DISPATCH, "6. Push dispatch request onto the database");
                     mDispatchRequestKey = mFirebaseUserDispatchRequest.push().getKey();
                     mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("longitude").setValue(mLastKnownLocation.getLongitude());
                     mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("latitude").setValue(mLastKnownLocation.getLatitude());
 
                     // 7. Set state to "Requesting a dispatch"
-                    Log.d(DEBUG_LOG, "7. Set state to \"Requesting a dispatch\"");
+                    Log.d(DEBUG_REQUEST_DISPATCH, "7. Set state to \"Requesting a dispatch\"");
                     mDispatchState = State.REQUESTING;
 
                 } else {
@@ -416,6 +483,8 @@ public class MainActivity extends AppCompatActivity
             @Override
             public void onCancelled(DatabaseError databaseError) {
                 Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 2
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 2");
                 destroyDispatchRequest();
             }
         });
@@ -434,15 +503,16 @@ public class MainActivity extends AppCompatActivity
                 public void run() {
                     if (mIndex < mNumberOfDrivers-1) {
                         // 12 B. Check to see if the driver has responded, else try the next on the list
-                        Log.d(DEBUG_LOG, "12 B. Check to see if the driver has responded, else try the next on the list");
+                        Log.d(DEBUG_REQUEST_DISPATCH, "12 B. Check to see if the driver has responded, else try the next on the list");
 
                         if (mDispatchState == State.CONNECTED) {
                             // 13. Connected to driver, quit runnable, track driver
-                            Log.d(DEBUG_LOG, "13. Connected to driver, quit runnable");
-                            trackDriver();
+                            Log.d(DEBUG_REQUEST_DISPATCH, "13. Connected to driver, quit runnable");
+                            onConnectedToDriver();
                         } else {
                             // 12 C1. Driver has not responded, request next closest driver
-                            Log.d(DEBUG_LOG, "12 C1. Driver has not responded, request next closest driver");
+                            Log.d(DEBUG_REQUEST_DISPATCH, "12 C1. Driver has not responded, request next closest driver");
+                            Toast.makeText(mContext, "Driver declined - trying next closest driver...", Toast.LENGTH_LONG).show();
                             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
                             mIndex++;
                             mFirebaseAvailableDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
@@ -454,6 +524,8 @@ public class MainActivity extends AppCompatActivity
                                 @Override
                                 public void onCancelled(DatabaseError databaseError) {
                                     Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                                    // 0 B. Dispatch cancelled from database error 3
+                                    Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 3");
                                     destroyDispatchRequest();
                                 }
                             });
@@ -463,7 +535,8 @@ public class MainActivity extends AppCompatActivity
 
                     } else {
                         // 12 C2. No drivers are currently available
-                        Log.d(DEBUG_LOG, "12 C2. No drivers are currently available");
+                        Log.d(DEBUG_REQUEST_DISPATCH, "12 C2. No drivers are currently available");
+                        // TODO: Show alert saying no drivers available
                         mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
                     }
                 }
@@ -471,7 +544,7 @@ public class MainActivity extends AppCompatActivity
 
             // 11. Request nearest driver and provide 10 seconds for response
             if (mDriverLocations.get(mIndex) != null) {
-                Log.d(DEBUG_LOG, "11. Request nearest driver and provide 10 seconds for response");
+                Log.d(DEBUG_REQUEST_DISPATCH, "11. Request nearest driver and provide 10 seconds for response");
                 mFirebaseAvailableDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
                     @Override
                     public void onDataChange(DataSnapshot dataSnapshot) {
@@ -481,9 +554,12 @@ public class MainActivity extends AppCompatActivity
                     @Override
                     public void onCancelled(DatabaseError databaseError) {
                         Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                        // 0 B. Dispatch cancelled from database error 4
+                        Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 4");
                         destroyDispatchRequest();
                     }
                 });
+                Toast.makeText(mContext, "Contacting nearest driver...", Toast.LENGTH_LONG).show();
                 mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").setValue(mDispatchRequestKey);
                 mHandler.postDelayed(waitForResponse, 10000);
             } else {
@@ -500,15 +576,15 @@ public class MainActivity extends AppCompatActivity
                 for (Map.Entry<String, Object> request : dispatchRequests.entrySet()) {
                     if (request.getKey().equals(mDispatchRequestKey)) {
                         // 8. Sort available drivers by closest
-                        Log.d(DEBUG_LOG, "8. Sort available drivers by closest");
+                        Log.d(DEBUG_REQUEST_DISPATCH, "8. Sort available drivers by closest");
                         Collections.sort(mDriverLocations);
 
                         // 9. Change dispatch state to "Searching and contacting nearest driver"
-                        Log.d(DEBUG_LOG, "9. Change dispatch state to \"Searching and contacting nearest driver\"");
+                        Log.d(DEBUG_REQUEST_DISPATCH, "9. Change dispatch state to \"Searching and contacting nearest driver\"");
                         mDispatchState = State.SEARCHING;
 
                         // 10. Find and contact nearest driver
-                        Log.d(DEBUG_LOG, "10. Find and contact nearest driver");
+                        Log.d(DEBUG_REQUEST_DISPATCH, "10. Find and contact nearest driver");
                         searchForDriver();
                     }
                 }
@@ -523,7 +599,7 @@ public class MainActivity extends AppCompatActivity
                     for (Map.Entry<String, Object> request : dispatchRequest.entrySet()) {
                         if (request.getKey().equals("Connected")) {
                             // 12 A. Driver has responded, send connect request, update state to "connected"
-                            Log.d(DEBUG_LOG, "12 A. Driver has responded, send connect request, update state to \"connected\"");
+                            Log.d(DEBUG_REQUEST_DISPATCH, "12 A. Driver has responded, send connect request, update state to \"connected\"");
                             String driverName = request.getValue().toString();
                             mFirebaseAvailableDrivers.child(driverName).child("Dispatch Request").setValue("Connected");
                             mDispatchState = State.CONNECTED;
@@ -537,7 +613,23 @@ public class MainActivity extends AppCompatActivity
     }
 
     // Connected to dispatch
-    public void trackDriver() {
+    public void onConnectedToDriver() {
+
+        // 1. Hide dispatch request buttons
+        Log.d(DEBUG_ON_CONNECTED, "1. Hide dispatch request buttons");
+        mCancelDispatch.setVisibility(View.GONE);
+        mActivityWheel.setVisibility(View.GONE);
+
+        // 2. Clear map
+        Log.d(DEBUG_ON_CONNECTED, "2. Clear map");
+        mMap.clear();
+
+        // 3. Update my marker
+        Log.d(DEBUG_ON_CONNECTED, "3. Update my marker");
+        updateMyMarker(mLastKnownLocation);
+
+        // 4. Listen for driver location updates
+        Log.d(DEBUG_ON_CONNECTED, "4. Listen for driver location updates");
         mUserDispatchRequestDriverListener = mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
@@ -548,47 +640,87 @@ public class MainActivity extends AppCompatActivity
                     mDriverLocationMarker.remove();
                 }
 
-                // 14 A. Tracking driver...
-                Log.d(DEBUG_LOG, "14 A. Tracking driver...");
+                // Tracking driver location...
+                Log.d(DEBUG_ON_CONNECTED, "Tracking driver location...");
 
                 mDriverLocationMarker = mMap.addMarker(new MarkerOptions()
                         .position(new LatLng((Double) driverInfo.get("latitude"), (Double) driverInfo.get("longitude")))
                         .title((String) driverInfo.get("name"))
                         .snippet((String) driverInfo.get("number"))
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
             }
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
                 Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 5
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 5");
                 destroyDispatchRequest();
             }
         });
+
+        // 5. Listen for driver ending dispatch
+        Log.d(DEBUG_ON_CONNECTED, "5. Listen for driver ending dispatch");
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if (dataSnapshot.getValue() != null) {
+                    if (dataSnapshot.getValue().equals("Cancelled")) {
+                        // 6. Driver ended dispatch
+                        Log.d(DEBUG_ON_CONNECTED, "6. Driver ended dispatch");
+                        mDispatchState = State.IDLE;
+
+                        // 0 D. Dispatch cancelled from driver
+                        Log.d(DEBUG_ON_CANCEL, "0 D. Dispatch cancelled from driver");
+                        destroyDispatchRequest();
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                //TODO: Handle Error
+            }
+        });
+
     }
 
     // Cancel a dispatch
     public void cancelDispatch(View view) {
+        // 0 A. Dispatch cancelled from cancel button click
+        Log.d(DEBUG_ON_CANCEL, "0 A. Dispatch cancelled from cancel button click");
         destroyDispatchRequest();
     }
 
     public void destroyDispatchRequest() {
 
         // 1. Change dispatch state to "not requesting a dispatch"
+        Log.d(DEBUG_ON_CANCEL, "1. Change dispatch state to \"not requesting a dispatch\"");
         if (mDispatchState != State.IDLE) {
-            Toast.makeText(this, "Dispatch Cancelled!", Toast.LENGTH_LONG).show();
+            Toast.makeText(mContext, "Dispatch Cancelled!", Toast.LENGTH_LONG).show();
         }
         mDispatchState = State.IDLE;
 
-        // 2. Show fab and hide dispatch request state views
+        // 2. Show fab and hide dispatch request state views, enable action bar buttons
+        Log.d(DEBUG_ON_CANCEL, "2. Show fab and hide dispatch request state views, enable action bar buttons");
         mCancelDispatch.setVisibility(View.GONE);
         mActivityWheel.setVisibility(View.GONE);
         mFab.setVisibility(View.VISIBLE);
+        mActionBarButtonState = true;
 
         // 3. Let the device sleep
+        Log.d(DEBUG_ON_CANCEL, "3. Let the device sleep");
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        // 4. Remove dispatch request from the database
+        // 4 A. Remove dispatch request from the database
+        Log.d(DEBUG_ON_CANCEL, "4 A. Remove dispatch request from the database");
         if (mDispatchRequestKey != null) {
+            // 4 B. Set connected node to "Cancelled"
+            Log.d(DEBUG_ON_CANCEL, "4 B. Set connected node to \"Cancelled\"");
+            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue("Cancelled");
+
+            // 4 C. Remove dispatch request from the database
+            Log.d(DEBUG_ON_CANCEL, "4 C. Remove dispatch request from the database");
             mFirebaseUserDispatchRequest.child(mDispatchRequestKey).removeValue();
             mDispatchRequestKey = null;
         }
@@ -647,7 +779,6 @@ public class MainActivity extends AppCompatActivity
                 marker.showInfoWindow();
                 CameraPosition cp = new CameraPosition(marker.getPosition(), 14.9f, 0, 17.5f);
                 mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cp), 500, null);
-                Log.d(DEBUG_LOG,"Marker Click");
                 return true;
             }
         });
@@ -683,7 +814,6 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onConnectionSuspended(int i) {
         //TODO: Handle Suspended Connection
-        Log.d(DEBUG_LOG,"onConnectionSuspended Fired");
     }
 
     @Override
@@ -691,14 +821,7 @@ public class MainActivity extends AppCompatActivity
 
         mLastKnownLocation = location;
 
-        if (mLocationMarker != null) {
-            mLocationMarker.remove();
-        }
-
-        mLocationMarker = mMap.addMarker(new MarkerOptions()
-                .position(new LatLng(location.getLatitude(), location.getLongitude()))
-                .title("My Location")
-                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+        updateMyMarker(location);
         
         if (mDispatchState == State.CONNECTED) {
             trackUserLocation(location);
@@ -708,14 +831,25 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
         //TODO: Handle Failed Connection
-        Log.d(DEBUG_LOG,"onConnectionFailed Fired");
     }
 
     public void trackUserLocation(Location location) {
-        // 14 B. Tracking user...
-        Log.d(DEBUG_LOG, "14 B. Tracking user...");
+        // Tracking my location...
+        Log.d(DEBUG_ON_CONNECTED, "Tracking my location...");
 
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("longitude").setValue(location.getLongitude());
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("latitude").setValue(location.getLatitude());
+    }
+
+    public void updateMyMarker(Location location) {
+
+        if (mLocationMarker != null) {
+            mLocationMarker.remove();
+        }
+
+        mLocationMarker = mMap.addMarker(new MarkerOptions()
+                .position(new LatLng(location.getLatitude(), location.getLongitude()))
+                .title("My Location")
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
     }
 }

@@ -16,6 +16,8 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -43,8 +45,15 @@ import java.util.Map;
 public class DriverActivity extends AppCompatActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
+    // TODO: LIFECYCLE and CLEAR LISTENERS
+
     /******* VARIABLES *******/
-    private final String DEBUG_LOG = "RBT Debug Log";
+    // Debugging
+    private final String DEBUG_REQUEST_DISPATCH = "Request Dispatch";
+    private final String DEBUG_DRIVER_LOCATIONS = "Request Locations";
+    private final String DEBUG_ON_CONNECTED = "Connected";
+    private final String DEBUG_ON_CANCEL = "Cancelled";
+    private final String DEBUG_ACTIVITY_LC = "Lifecycle";
 
     // Alerts
     private AlertDialog.Builder mIncomingDispatchAlert;
@@ -52,12 +61,11 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     // Driver Information
     private String mName;
     private String mNumber;
-    private Location mDriverLocation;
+    private Location mLastKnownLocation;
 
     // Firebase
     private DatabaseReference mFirebaseAvailableDrivers;
     private DatabaseReference mFirebaseLocationRequest;
-    private DatabaseReference mFirebaseDriverDispatchRequest;
     private DatabaseReference mFirebaseUserDispatchRequest;
     private String mDispatchRequestKey;
 
@@ -71,6 +79,11 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     private GoogleMap mMap;
     private GoogleApiClient mGoogleApiClient;
     private Marker mLocationMarker;
+    private Marker mUserLocationMarker;
+
+    //Navigation
+    private Button mEndButton;
+    private FloatingActionButton mRefreshFab;
 
 
     /******* ACTIVITY LIFECYCLE *******/
@@ -111,28 +124,47 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         mNumber = intent.getStringExtra("number");
 
 
+        /******* Initialize Firebase *******/
+        FirebaseDatabase database = FirebaseDatabase.getInstance();
+        mFirebaseAvailableDrivers = database.getReference("Available Drivers");
+        mFirebaseUserDispatchRequest = database.getReference("Dispatch Request");
+        mFirebaseLocationRequest = database.getReference("Location Request");
+
+        /******* Initialize Google Api - Location, Map *******/
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.map);
+        mapFragment.getMapAsync(this);
+
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(LocationServices.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
+
         /******* Initialize Navigation *******/
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         toolbar.setTitle("You are logged in as " + mName);
         setSupportActionBar(toolbar);
 
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        assert fab != null;
-        fab.setOnClickListener(new View.OnClickListener() {
+        mRefreshFab = (FloatingActionButton) findViewById(R.id.fab);
+        assert mRefreshFab != null;
+        mRefreshFab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d(DEBUG_LOG, "fab");
                 requestDriverLocations();
             }
         });
 
+        mEndButton = (Button) findViewById(R.id.end_button);
+        mEndButton.setVisibility(View.GONE);
+    }
 
-        /******* Initialize Firebase *******/
-        FirebaseDatabase database = FirebaseDatabase.getInstance();
-        mFirebaseAvailableDrivers = database.getReference("Available Drivers");
-        mFirebaseUserDispatchRequest = database.getReference("Dispatch Request");
-        mFirebaseDriverDispatchRequest = database.getReference("Available Drivers").child(mName).child("Dispatch Request");
-        mFirebaseDriverDispatchRequest.addValueEventListener(new ValueEventListener() {
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.getValue() != null) {
@@ -151,25 +183,6 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             }
         });
 
-
-        /******* Initialize Google Api - Location, Map *******/
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.map);
-        mapFragment.getMapAsync(this);
-
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addApi(LocationServices.API)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .build();
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-
-        FirebaseDatabase database = FirebaseDatabase.getInstance();
-        mFirebaseLocationRequest = database.getReference("Location Request");
         mFirebaseLocationRequest.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
@@ -186,11 +199,6 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     }
 
     @Override
-    protected void onRestart() {
-        super.onRestart();
-    }
-
-    @Override
     protected void onStop() {
         super.onStop();
         mGoogleApiClient.disconnect();
@@ -200,23 +208,20 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     /******* DRIVER LOGIC *******/
     // Updating Driver Map
     public void requestDriverLocations() {
-        Log.d(DEBUG_LOG, "I have requested all driver locations");
         String key = mFirebaseLocationRequest.push().getKey();
         mFirebaseLocationRequest.child(key).setValue("REQUEST");
         mFirebaseLocationRequest.child(key).removeValue();
-        updateMap();
     }
 
     public void driverLocationRequestReceived() {
-        Log.d(DEBUG_LOG, "My Location was requested - connect");
         mGoogleApiClient.connect();
-        if ((mDriverLocation != null) && (mDispatchState == State.AVAILABLE)) {
-            mFirebaseAvailableDrivers.child(mName).child("latitude").setValue(mDriverLocation.getLatitude());
-            mFirebaseAvailableDrivers.child(mName).child("longitude").setValue(mDriverLocation.getLongitude());
+        if ((mLastKnownLocation != null) && (mDispatchState == State.AVAILABLE)) {
+            mFirebaseAvailableDrivers.child(mName).child("latitude").setValue(mLastKnownLocation.getLatitude());
+            mFirebaseAvailableDrivers.child(mName).child("longitude").setValue(mLastKnownLocation.getLongitude());
             mFirebaseAvailableDrivers.child(mName).child("phone number").setValue(mNumber);
-        } else {
-            mFirebaseAvailableDrivers.child(mName).setValue(null);
         }
+        updateMap();
+        mFirebaseAvailableDrivers.child(mName).child("phone number").setValue(mNumber);
     }
 
     public void updateMap(){
@@ -229,7 +234,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
                 for (Map.Entry<String, Object> driver : driverLocations.entrySet()) {
 
-                    if (driver.getKey() != mName) {
+                    if (!driver.getKey().equals(mName)) {
                         Double lat = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString());
                         Double lon = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString());
                         String number = ((Map<String, Object>) driver.getValue()).get("phone number").toString();
@@ -241,8 +246,6 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
                     }
                 }
-
-                mGoogleApiClient.connect();
             }
 
             @Override
@@ -255,22 +258,79 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     // Dispatch Logic
     public void incomingDispatchAlert(int which) {
         if (which == DialogInterface.BUTTON_POSITIVE) {
-            Log.d(DEBUG_LOG, "accept");
             mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue(mName);
         } else if (which == DialogInterface.BUTTON_NEGATIVE) {
-            Log.d(DEBUG_LOG, "decline");
             mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").removeValue();
         }
     }
 
     public void connectedToCustomer(DataSnapshot dataSnapshot) {
-        // connected
+
+        mMap.clear();
+
+        mEndButton.setVisibility(View.VISIBLE);
+        mRefreshFab.setVisibility(View.GONE);
+
+        updateMyMarker(mLastKnownLocation);
+
         mFirebaseAvailableDrivers.child(mName).removeValue();
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").removeValue();
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("name").setValue(mName);
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("number").setValue(mNumber);
         mDispatchState = State.ON_DISPATCH;
         mGoogleApiClient.connect();
+
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+
+                Map<String, Object> userInfo = (Map<String, Object>) dataSnapshot.getValue();
+
+                if (mUserLocationMarker != null) {
+                    mUserLocationMarker.remove();
+                }
+
+                mUserLocationMarker = mMap.addMarker(new MarkerOptions()
+                        .position(new LatLng((Double) userInfo.get("latitude"), (Double) userInfo.get("longitude")))
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
+
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if (dataSnapshot.getValue() != null) {
+                    if (dataSnapshot.getValue().equals("Cancelled")) {
+                        disconnectFromDispatchRequest();
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                //TODO: Handle Error
+            }
+        });
+    }
+
+    public void onEndButtonClick(View view) {
+        disconnectFromDispatchRequest();
+    }
+
+    public void disconnectFromDispatchRequest() {
+        mDispatchState = State.AVAILABLE;
+        mEndButton.setVisibility(View.GONE);
+        mRefreshFab.setVisibility(View.VISIBLE);
+
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue("Cancelled");
+
+        mMap.clear();
+
+        requestDriverLocations();
     }
 
 
@@ -285,7 +345,6 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                 marker.showInfoWindow();
                 CameraPosition cp = new CameraPosition(marker.getPosition(), 14.9f, 0, 17.5f);
                 mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cp), 500, null);
-                Log.d(DEBUG_LOG,"Marker Click");
                 return true;
             }
         });
@@ -323,22 +382,14 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     @Override
     public void onConnectionSuspended(int i) {
         //TODO: Handle Suspended Connection
-        Log.d(DEBUG_LOG,"onConnectionSuspended Fired");
     }
 
     @Override
     public void onLocationChanged(Location location) {
 
-        if (mLocationMarker != null) {
-            mLocationMarker.remove();
-        }
+        mLastKnownLocation = location;
 
-        mLocationMarker = mMap.addMarker(new MarkerOptions()
-                .position(new LatLng(location.getLatitude(), location.getLongitude()))
-                .title("ME")
-                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
-
-        mDriverLocation = location;
+        updateMyMarker(location);
 
         if (mDispatchState == State.AVAILABLE) {
             mGoogleApiClient.disconnect();
@@ -351,7 +402,6 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     @Override
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
         //TODO: Handle Failed Connection
-        Log.d(DEBUG_LOG,"onConnectionFailed Fired");
     }
 
     public void trackDriverLocation(Location location) {
@@ -362,6 +412,23 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                 .child("longitude")
                 .setValue(location.getLongitude());
 
+    }
+
+    public void updateMyMarker(Location location) {
+
+        if (mLocationMarker != null) {
+            mLocationMarker.remove();
+        }
+
+        mLocationMarker = mMap.addMarker(new MarkerOptions()
+                .position(new LatLng(location.getLatitude(), location.getLongitude()))
+                .title("ME")
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+
+        if (mDispatchState == State.AVAILABLE) {
+            mFirebaseAvailableDrivers.child(mName).child("latitude").setValue(location.getLatitude());
+            mFirebaseAvailableDrivers.child(mName).child("longitude").setValue(location.getLongitude());
+        }
     }
 
 }
