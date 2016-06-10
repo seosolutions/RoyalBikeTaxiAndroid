@@ -75,6 +75,8 @@ public class MainActivity extends AppCompatActivity
     private DatabaseReference mFirebaseAvailableDrivers;
     private DatabaseReference mFirebaseLocationRequest;
     private String mDispatchRequestKey;
+    private ValueEventListener mUserDispatchRequestListener;
+    private ValueEventListener mUserDispatchRequestDriverListener;
 
     // Flow Control
     private boolean mBoundsDisplayed;
@@ -104,8 +106,6 @@ public class MainActivity extends AppCompatActivity
 
 
     /******* ACTIVITY LIFECYCLE *******/
-    //TODO: Keep from sleeping, changing state in any way
-    //TODO: REMOVE EVENT LISTENERS ON ACTIVITY CHANGE removeEventListener()
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -159,21 +159,8 @@ public class MainActivity extends AppCompatActivity
         /******* Initialize Firebase *******/
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         mFirebaseAvailableDrivers = database.getReference("Available Drivers");
-
         mFirebaseLocationRequest = database.getReference("Location Request");
-
         mFirebaseUserDispatchRequest = database.getReference("Dispatch Request");
-        mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                driverHandshake(dataSnapshot);
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-                //TODO: Handle
-            }
-        });
 
 
         /******* Initialize Flow Control *******/
@@ -194,8 +181,6 @@ public class MainActivity extends AppCompatActivity
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
-
-        mGoogleApiClient.connect();
 
 
         /******* Initialize Navigation *******/
@@ -230,23 +215,42 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    protected void onRestart() {
-        super.onRestart();
+    protected void onStart() {
+        super.onStart();
+
+        // Initialize user dispatch request listener
+        mUserDispatchRequestListener = mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                driverHandshake(dataSnapshot);
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                //TODO: Handle
+            }
+        });
+
+        // Connect to the api client
         mGoogleApiClient.connect();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        mGoogleApiClient.disconnect();
-        destroyDispatchRequest();
-    }
 
-    @Override
-    protected void onPause() {
-        super.onPause();
+        // Disconnect the api client
         mGoogleApiClient.disconnect();
+
+        // Destroy any dispatch requests
         destroyDispatchRequest();
+
+        // Remove event listeners
+        mFirebaseUserDispatchRequest.removeEventListener(mUserDispatchRequestListener);
+
+        if (mUserDispatchRequestDriverListener != null) {
+            mFirebaseUserDispatchRequest.removeEventListener(mUserDispatchRequestDriverListener);
+        }
     }
 
 
@@ -487,7 +491,7 @@ public class MainActivity extends AppCompatActivity
 
     // Connected to dispatch
     public void trackDriver() {
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").addValueEventListener(new ValueEventListener() {
+        mUserDispatchRequestDriverListener = mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 Map<String, Object> driverInfo = (Map<String, Object>) dataSnapshot.getValue();
@@ -515,20 +519,24 @@ public class MainActivity extends AppCompatActivity
 
     // Cancel a dispatch
     public void cancelDispatch(View view) {
-        // 1. Change dispatch state to "not requesting a dispatch"
-        mDispatchState = State.IDLE;
-
-        // 2. Show fab and hide dispatch request state views
-        view.setVisibility(View.GONE);
-        mActivityWheel.setVisibility(View.GONE);
-        mFab.setVisibility(View.VISIBLE);
-        Toast.makeText(this, "Dispatch Cancelled!", Toast.LENGTH_LONG).show();
-
-        // 3. Delete dispatch request in the database
         destroyDispatchRequest();
     }
 
     public void destroyDispatchRequest() {
+
+        // 1. Change dispatch state to "not requesting a dispatch"
+        mDispatchState = State.IDLE;
+
+        // 2. Show fab and hide dispatch request state views
+        mCancelDispatch.setVisibility(View.GONE);
+        mActivityWheel.setVisibility(View.GONE);
+        mFab.setVisibility(View.VISIBLE);
+        Toast.makeText(this, "Dispatch Cancelled!", Toast.LENGTH_LONG).show();
+
+        // 3. Let the device sleep
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // 4. Remove dispatch request from the database
         if (mDispatchRequestKey != null) {
             mFirebaseUserDispatchRequest.child(mDispatchRequestKey).removeValue();
             mDispatchRequestKey = null;
@@ -603,8 +611,6 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onConnected(@Nullable Bundle bundle) {
         LocationRequest locationRequest = LocationRequest.create();
-        //TODO: look into HIGH ACCURACY vs BATTER and DATA saver
-        // Consider, to safe driver data and battery, letting him choose the interval
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         locationRequest.setInterval(5000);
         locationRequest.setFastestInterval(2500);
