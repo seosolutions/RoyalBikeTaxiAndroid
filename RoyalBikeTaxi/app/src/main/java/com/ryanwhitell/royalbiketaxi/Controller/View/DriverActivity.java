@@ -1,6 +1,7 @@
 package com.ryanwhitell.royalbiketaxi.Controller.View;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -46,14 +47,15 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
     // TODO: LIFECYCLE and CLEAR LISTENERS
+    // TODO: Debug log messsages. Canceling dispatch thing still not working
+    // TODO: Quell all warnings
 
     /******* VARIABLES *******/
     // Debugging
-    private final String DEBUG_REQUEST_DISPATCH = "Request Dispatch";
-    private final String DEBUG_DRIVER_LOCATIONS = "Request Locations";
-    private final String DEBUG_ON_CONNECTED = "Connected";
-    private final String DEBUG_ON_CANCEL = "Cancelled";
+    private final String DEBUG_SIGN_IN = "SignIn";
     private final String DEBUG_ACTIVITY_LC = "Lifecycle";
+    private final String DEBUG_DISPATCH_REQUEST = "DispatchRequest";
+    private final String DEBUG_ON_CANCEL = "Cancelled";
 
     // Alerts
     private AlertDialog.Builder mIncomingDispatchAlert;
@@ -63,11 +65,18 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     private String mNumber;
     private Location mLastKnownLocation;
 
+    // Context
+    private Context mContext;
+
     // Firebase
     private DatabaseReference mFirebaseAvailableDrivers;
     private DatabaseReference mFirebaseLocationRequest;
     private DatabaseReference mFirebaseUserDispatchRequest;
     private String mDispatchRequestKey;
+    private ValueEventListener mLocationRequestListener;
+    private ValueEventListener mMyDispatchRequestListener;
+    private ValueEventListener mTrackUserListener;
+    private ValueEventListener mUserConnectionListener;
 
     //Flow Control
     private enum State {
@@ -91,6 +100,9 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_driver);
+
+        //onCreate()
+        Log.d(DEBUG_ACTIVITY_LC,"onCreate()");
 
         // DEBUGGING keep screen alive
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -158,19 +170,31 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
         mEndButton = (Button) findViewById(R.id.end_button);
         mEndButton.setVisibility(View.GONE);
+
+        /******* Context *******/
+        mContext = this;
     }
 
     @Override
     protected void onStart() {
         super.onStart();
 
-        mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").addValueEventListener(new ValueEventListener() {
+        // onStart()
+        Log.d(DEBUG_ACTIVITY_LC, "onStart()");
+
+        // 1. Add value event listener for "Dispatch Request"
+        Log.d(DEBUG_SIGN_IN, "1. Add value event listener for \"Dispatch Request\"");
+        mMyDispatchRequestListener = mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.getValue() != null) {
                     if (dataSnapshot.getValue().equals("Connected")) {
-                        connectedToCustomer(dataSnapshot);
+                        // 3. User has confirmed and connected
+                        Log.d(DEBUG_DISPATCH_REQUEST, "3. User has confirmed and connected");
+                        connectedToUser();
                     } else {
+                        // 1. Incoming dispatch request
+                        Log.d(DEBUG_DISPATCH_REQUEST, "1. Incoming dispatch request");
                         mDispatchRequestKey = dataSnapshot.getValue().toString();
                         mIncomingDispatchAlert.create().show();
                     }
@@ -179,28 +203,53 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-
+                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 1
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 1");
+                disconnectFromUser();
             }
         });
 
-        mFirebaseLocationRequest.addValueEventListener(new ValueEventListener() {
+        // 2. Add value event listener for "Location Request"
+        Log.d(DEBUG_SIGN_IN, "2. Add value event listener for \"Location Request\"");
+        mLocationRequestListener = mFirebaseLocationRequest.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (mDispatchState == State.AVAILABLE) {
+                    // 4. Driver location request received
+                    Log.d(DEBUG_SIGN_IN, "4. Driver location request received");
                     driverLocationRequestReceived();
                 }
             }
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                // TODO: handle
+                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 2
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 2");
+                disconnectFromUser();
             }
         });
+
+        // 3. Set phone number in database
+        Log.d(DEBUG_SIGN_IN, "3. Set phone number in database");
+        mFirebaseAvailableDrivers.child(mName).child("phone number").setValue(mNumber);
     }
 
     @Override
     protected void onStop() {
         super.onStop();
+
+        // onStop()
+        Log.d(DEBUG_ACTIVITY_LC, "onStop()");
+
+        mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").removeEventListener(mMyDispatchRequestListener);
+        mFirebaseLocationRequest.removeEventListener(mLocationRequestListener);
+
+        // 0 C. Dispatch cancelled from onStop()
+        Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from onStop()");
+        disconnectFromUser();
+
         mGoogleApiClient.disconnect();
     }
 
@@ -214,14 +263,20 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     }
 
     public void driverLocationRequestReceived() {
+        // 5. Connect to API client
+        Log.d(DEBUG_SIGN_IN, "5. Connect to API client");
+
         mGoogleApiClient.connect();
+
         if ((mLastKnownLocation != null) && (mDispatchState == State.AVAILABLE)) {
             mFirebaseAvailableDrivers.child(mName).child("latitude").setValue(mLastKnownLocation.getLatitude());
             mFirebaseAvailableDrivers.child(mName).child("longitude").setValue(mLastKnownLocation.getLongitude());
-            mFirebaseAvailableDrivers.child(mName).child("phone number").setValue(mNumber);
+
         }
+
+        // 6. Update the map
+        Log.d(DEBUG_SIGN_IN, "6. Update the map");
         updateMap();
-        mFirebaseAvailableDrivers.child(mName).child("phone number").setValue(mNumber);
     }
 
     public void updateMap(){
@@ -230,6 +285,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             public void onDataChange(DataSnapshot dataSnapshot) {
                 Map<String, Object> driverLocations = (Map<String, Object>) dataSnapshot.getValue();
 
+                // 7. Clear the current map and update it
+                Log.d(DEBUG_SIGN_IN, "7. Clear the current map");
                 mMap.clear();
 
                 for (Map.Entry<String, Object> driver : driverLocations.entrySet()) {
@@ -250,7 +307,10 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                //TODO: handle
+                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 3
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 3");
+                disconnectFromUser();
             }
         });
     }
@@ -258,28 +318,41 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     // Dispatch Logic
     public void incomingDispatchAlert(int which) {
         if (which == DialogInterface.BUTTON_POSITIVE) {
+            // 2. Dispatch request accepted
+            Log.d(DEBUG_DISPATCH_REQUEST, "2. Dispatch request accepted");
             mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue(mName);
         } else if (which == DialogInterface.BUTTON_NEGATIVE) {
             mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").removeValue();
         }
     }
 
-    public void connectedToCustomer(DataSnapshot dataSnapshot) {
+    public void connectedToUser() {
 
+        // 4. Clear map
+        Log.d(DEBUG_DISPATCH_REQUEST, "4. Clear map");
         mMap.clear();
 
+        // 5. Hide fab and show end ride button, prevent device sleep
+        Log.d(DEBUG_DISPATCH_REQUEST, "5. Hide fab and show end ride button, prevent device sleep");
         mEndButton.setVisibility(View.VISIBLE);
         mRefreshFab.setVisibility(View.GONE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+        // 6. Update my marker
+        Log.d(DEBUG_DISPATCH_REQUEST, "6. Update my marker");
         updateMyMarker(mLastKnownLocation);
 
+        // 7. Remove self from "Available Drivers," update information, set state to "On Dispatch"
+        Log.d(DEBUG_DISPATCH_REQUEST, "7. Remove self from \"Available Drivers,\" update information, set state to \"On Dispatch\"");
         mFirebaseAvailableDrivers.child(mName).removeValue();
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("name").setValue(mName);
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("number").setValue(mNumber);
         mDispatchState = State.ON_DISPATCH;
         mGoogleApiClient.connect();
 
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).addValueEventListener(new ValueEventListener() {
+        // 8. Initialize track user location listener
+        Log.d(DEBUG_DISPATCH_REQUEST, "8. Initialize track user location listener");
+        mTrackUserListener = mFirebaseUserDispatchRequest.child(mDispatchRequestKey).addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
 
@@ -289,6 +362,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                     mUserLocationMarker.remove();
                 }
 
+                // Track user...
+                Log.d(DEBUG_DISPATCH_REQUEST, "Track user...");
                 mUserLocationMarker = mMap.addMarker(new MarkerOptions()
                         .position(new LatLng((Double) userInfo.get("latitude"), (Double) userInfo.get("longitude")))
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
@@ -296,41 +371,58 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-
+                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 4
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 4");
+                disconnectFromUser();
             }
         });
 
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").addValueEventListener(new ValueEventListener() {
+        mUserConnectionListener = mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.getValue() != null) {
                     if (dataSnapshot.getValue().equals("Cancelled")) {
-                        disconnectFromDispatchRequest();
+                        disconnectFromUser();
                     }
                 }
             }
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                //TODO: Handle Error
+                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 5
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 5");
+                disconnectFromUser();
             }
         });
     }
 
-    public void onEndButtonClick(View view) {
-        disconnectFromDispatchRequest();
+    public void disconnectFromUser() {
+        if (mDispatchState == State.ON_DISPATCH) {
+
+            // 2. Change state to "Available," show fab, hide end button, allow device sleep
+            Log.d(DEBUG_ON_CANCEL, "2. Change state to \"Available,\" show fab, hide end button");
+            mDispatchState = State.AVAILABLE;
+            mEndButton.setVisibility(View.GONE);
+            mRefreshFab.setVisibility(View.VISIBLE);
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+            // 3. Remove event listeners, clear the map, request driver locations
+            Log.d(DEBUG_ON_CANCEL, "3. Remove event listeners, clear the map, request driver locations");
+            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).removeEventListener(mTrackUserListener);
+            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").removeEventListener(mUserConnectionListener);
+            mMap.clear();
+
+            requestDriverLocations();
+        }
     }
 
-    public void disconnectFromDispatchRequest() {
-        mDispatchState = State.AVAILABLE;
-        mEndButton.setVisibility(View.GONE);
-        mRefreshFab.setVisibility(View.VISIBLE);
-
+    public void onEndButtonClick(View view) {
+        // 1. Notify user that the driver has ended the ride or cancelled
+        Log.d(DEBUG_ON_CANCEL, "1. Notify user that the driver has ended the ride or cancelled");
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue("Cancelled");
-
-        mMap.clear();
-
-        requestDriverLocations();
+        disconnectFromUser();
     }
 
 
@@ -389,9 +481,13 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
         mLastKnownLocation = location;
 
+        // 8. Update my location on map and database
+        Log.d(DEBUG_SIGN_IN, "8. Update my location on map and database");
         updateMyMarker(location);
 
         if (mDispatchState == State.AVAILABLE) {
+            // 9. Disconnect from the Api
+            Log.d(DEBUG_SIGN_IN, "9. Disconnect from the Api ");
             mGoogleApiClient.disconnect();
         } else if (mDispatchState == State.ON_DISPATCH) {
             trackDriverLocation(location);
@@ -405,12 +501,16 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     }
 
     public void trackDriverLocation(Location location) {
+        // Track driver....
+        Log.d(DEBUG_DISPATCH_REQUEST, "Track driver....");
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver")
                 .child("latitude")
                 .setValue(location.getLatitude());
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver")
                 .child("longitude")
                 .setValue(location.getLongitude());
+
+        updateMyMarker(location);
 
     }
 

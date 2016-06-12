@@ -64,11 +64,13 @@ public class MainActivity extends AppCompatActivity
 
     //TODO: supress all unchecked casts @SuppressWarnings("unchecked")
     //TODO: remove all event listeners
+    // TODO: Quell AlL warnings, cancel dispatch thing still not working
+    // TODO: LIFECYCLEEE!!
 
     /******* VARIABLES *******/
     // Debugging
-    private final String DEBUG_REQUEST_DISPATCH = "Request Dispatch";
-    private final String DEBUG_DRIVER_LOCATIONS = "Request Locations";
+    private final String DEBUG_REQUEST_DISPATCH = "RequestDispatch";
+    private final String DEBUG_DRIVER_LOCATIONS = "RequestLocations";
     private final String DEBUG_ON_CONNECTED = "Connected";
     private final String DEBUG_ON_CANCEL = "Cancelled";
     private final String DEBUG_ACTIVITY_LC = "Lifecycle";
@@ -396,7 +398,10 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                //TODO: handle
+                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 76
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 7");
+                destroyDispatchRequest();
             }
         });
     }
@@ -679,7 +684,10 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                //TODO: Handle Error
+                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                // 0 B. Dispatch cancelled from database error 6
+                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 6");
+                destroyDispatchRequest();
             }
         });
 
