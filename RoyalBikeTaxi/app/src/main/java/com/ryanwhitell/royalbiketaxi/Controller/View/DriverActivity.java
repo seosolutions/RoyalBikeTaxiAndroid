@@ -47,7 +47,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
     // TODO: LIFECYCLE and CLEAR LISTENERS
-    // TODO: Debug log messsages. Canceling dispatch thing still not working
+    // TODO: Debug log messages. Canceling dispatch thing still not working
     // TODO: Quell all warnings
 
     /******* VARIABLES *******/
@@ -156,6 +156,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
         /******* Initialize Navigation *******/
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        assert toolbar != null;
         toolbar.setTitle("You are logged in as " + mName);
         setSupportActionBar(toolbar);
 
@@ -169,6 +170,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         });
 
         mEndButton = (Button) findViewById(R.id.end_button);
+        assert mEndButton != null;
         mEndButton.setVisibility(View.GONE);
 
         /******* Context *******/
@@ -224,10 +226,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
-                // 0 B. Dispatch cancelled from database error 2
-                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 2");
-                disconnectFromUser();
+                Toast.makeText(mContext, "Could not handle location request. There was a database error!", Toast.LENGTH_LONG).show();
             }
         });
 
@@ -271,7 +270,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         if ((mLastKnownLocation != null) && (mDispatchState == State.AVAILABLE)) {
             mFirebaseAvailableDrivers.child(mName).child("latitude").setValue(mLastKnownLocation.getLatitude());
             mFirebaseAvailableDrivers.child(mName).child("longitude").setValue(mLastKnownLocation.getLongitude());
-
+            mFirebaseAvailableDrivers.child(mName).child("phone number").setValue(mNumber);
         }
 
         // 6. Update the map
@@ -281,36 +280,33 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
     public void updateMap(){
         mFirebaseAvailableDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
+            @SuppressWarnings("unchecked")
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                Map<String, Object> driverLocations = (Map<String, Object>) dataSnapshot.getValue();
+                if (dataSnapshot.getValue() != null) {
+                    Map<String, Object> driverLocations = (Map<String, Object>) dataSnapshot.getValue();
 
-                // 7. Clear the current map and update it
-                Log.d(DEBUG_SIGN_IN, "7. Clear the current map");
-                mMap.clear();
+                    // 7. Clear the current map and update it
+                    Log.d(DEBUG_SIGN_IN, "7. Clear the current map and update it");
+                    mMap.clear();
 
-                for (Map.Entry<String, Object> driver : driverLocations.entrySet()) {
+                    for (Map.Entry<String, Object> driver : driverLocations.entrySet()) {
 
-                    if (!driver.getKey().equals(mName)) {
-                        Double lat = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString());
-                        Double lon = Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString());
-                        String number = ((Map<String, Object>) driver.getValue()).get("phone number").toString();
-
-                        mMap.addMarker(new MarkerOptions()
-                                .position(new LatLng(lat, lon))
-                                .title(driver.getKey().toString())
-                                .snippet(number)
-                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
+                        if (!driver.getKey().equals(mName)) {
+                            mMap.addMarker(new MarkerOptions()
+                                    .position(new LatLng(Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString()),
+                                            Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString())))
+                                    .title(driver.getKey())
+                                    .snippet(((Map<String, Object>) driver.getValue()).get("phone number").toString())
+                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
+                        }
                     }
                 }
             }
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
-                // 0 B. Dispatch cancelled from database error 3
-                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 3");
-                disconnectFromUser();
+                Toast.makeText(mContext, "Could not update map. There was a database error!", Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -336,7 +332,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         Log.d(DEBUG_DISPATCH_REQUEST, "5. Hide fab and show end ride button, prevent device sleep");
         mEndButton.setVisibility(View.VISIBLE);
         mRefreshFab.setVisibility(View.GONE);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        //getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // 6. Update my marker
         Log.d(DEBUG_DISPATCH_REQUEST, "6. Update my marker");
@@ -353,20 +349,39 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         // 8. Initialize track user location listener
         Log.d(DEBUG_DISPATCH_REQUEST, "8. Initialize track user location listener");
         mTrackUserListener = mFirebaseUserDispatchRequest.child(mDispatchRequestKey).addValueEventListener(new ValueEventListener() {
+            @SuppressWarnings("unchecked")
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
+                if (dataSnapshot.getValue() != null) {
 
-                Map<String, Object> userInfo = (Map<String, Object>) dataSnapshot.getValue();
+                    Map<String, Object> userInfo = (Map<String, Object>) dataSnapshot.getValue();
 
-                if (mUserLocationMarker != null) {
-                    mUserLocationMarker.remove();
+
+                    if (mUserLocationMarker != null) {
+                        if ((mUserLocationMarker.getPosition().latitude != (Double) userInfo.get("latitude")) ||
+                                (mUserLocationMarker.getPosition().longitude != (Double) userInfo.get("longitude"))) {
+                            mUserLocationMarker.remove();
+
+                            // User location changed
+                            Log.d(DEBUG_DISPATCH_REQUEST, "User location changed");
+                            mUserLocationMarker = mMap.addMarker(new MarkerOptions()
+                                    .position(new LatLng((Double) userInfo.get("latitude"), (Double) userInfo.get("longitude")))
+                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                        }
+
+                    } else {
+                        // User location initialized
+                        Log.d(DEBUG_DISPATCH_REQUEST, "User location initialized");
+                        mUserLocationMarker = mMap.addMarker(new MarkerOptions()
+                                .position(new LatLng((Double) userInfo.get("latitude"), (Double) userInfo.get("longitude")))
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                    }
+
+                } else {
+                    // 0 A. Dispatch cancelled from deletion of User Dispatch Request node
+                    Log.d(DEBUG_ON_CANCEL, "0 A. Dispatch cancelled from deletion of User Dispatch Request node");
+                    disconnectFromUser();
                 }
-
-                // Track user...
-                Log.d(DEBUG_DISPATCH_REQUEST, "Track user...");
-                mUserLocationMarker = mMap.addMarker(new MarkerOptions()
-                        .position(new LatLng((Double) userInfo.get("latitude"), (Double) userInfo.get("longitude")))
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
             }
 
             @Override
@@ -406,7 +421,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             mDispatchState = State.AVAILABLE;
             mEndButton.setVisibility(View.GONE);
             mRefreshFab.setVisibility(View.VISIBLE);
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            // getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
             // 3. Remove event listeners, clear the map, request driver locations
             Log.d(DEBUG_ON_CANCEL, "3. Remove event listeners, clear the map, request driver locations");
