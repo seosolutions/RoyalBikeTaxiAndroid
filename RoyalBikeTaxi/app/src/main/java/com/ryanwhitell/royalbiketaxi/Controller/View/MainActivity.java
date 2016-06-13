@@ -452,8 +452,8 @@ public class MainActivity extends AppCompatActivity
         mFirebaseLocationRequest.child(key).setValue("REQUEST");
         mFirebaseLocationRequest.child(key).removeValue();
 
-        // 3. Update Driver Locations
-        Log.d(DEBUG_REQUEST_DISPATCH, "3. Update Driver Locations");
+        // 3 A. Update Driver Locations
+        Log.d(DEBUG_REQUEST_DISPATCH, "3 A. Update Driver Locations");
         updateDriverLocations();
 
         // 4. Change dispatch state to "currently waiting for driver update"
@@ -497,7 +497,11 @@ public class MainActivity extends AppCompatActivity
                     mDispatchState = State.REQUESTING;
 
                 } else {
-                    // TODO: There are no available drivers
+                    // 3 B. No drivers are currently available
+                    Log.d(DEBUG_REQUEST_DISPATCH, "3 B. No drivers are currently available");
+                    mDispatchState = State.IDLE;
+                    mNoAvailableDriversAlert.create().show();
+                    destroyDispatchRequest();
                 }
             }
 
