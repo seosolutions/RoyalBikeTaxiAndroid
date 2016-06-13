@@ -406,7 +406,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.getValue() != null) {
-                    if (dataSnapshot.getValue().equals("Cancelled")) {
+                    if (dataSnapshot.getValue().equals("User Cancelled")) {
                         disconnectFromUser();
                     }
                 }
@@ -445,7 +445,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     public void onEndButtonClick(View view) {
         // 1. Notify user that the driver has ended the ride or cancelled
         Log.d(DEBUG_ON_CANCEL, "1. Notify user that the driver has ended the ride or cancelled");
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue("Cancelled");
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue("Driver Cancelled");
         disconnectFromUser();
     }
 

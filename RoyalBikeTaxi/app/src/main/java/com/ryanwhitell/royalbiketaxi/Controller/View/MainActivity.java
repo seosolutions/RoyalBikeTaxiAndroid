@@ -521,15 +521,16 @@ public class MainActivity extends AppCompatActivity
             Runnable waitForResponse = new Runnable() {
                 @Override
                 public void run() {
-                    if ((mIndex < mNumberOfDrivers-1) && (mDispatchState == State.SEARCHING)) {
+                    if ((mIndex < mNumberOfDrivers-1)) {
                         // 12 B. Check to see if the driver has responded, else try the next on the list
                         Log.d(DEBUG_REQUEST_DISPATCH, "12 B. Check to see if the driver has responded, else try the next on the list");
 
                         if (mDispatchState == State.CONNECTED) {
                             // 13. Connected to driver, quit runnable, track driver
                             Log.d(DEBUG_REQUEST_DISPATCH, "13. Connected to driver, quit runnable");
+                            Toast.makeText(mContext, "Connected!", Toast.LENGTH_LONG).show();
                             onConnectedToDriver();
-                        } else {
+                        } else if (mDispatchState == State.SEARCHING) {
                             // 12 C1. Driver has not responded, request next closest driver
                             Log.d(DEBUG_REQUEST_DISPATCH, "12 C1. Driver has not responded, request next closest driver");
                             Toast.makeText(mContext, "Driver declined - trying next closest driver...", Toast.LENGTH_LONG).show();
@@ -598,7 +599,7 @@ public class MainActivity extends AppCompatActivity
                             // 12 A. Driver has responded, send connect request, update state to "connected"
                             Log.d(DEBUG_REQUEST_DISPATCH, "12 A. Driver has responded, send connect request, update state to \"connected\"");
                             String driverName = request.getValue().toString();
-                            Toast.makeText(mContext, "Connected! Your driver is " + driverName, Toast.LENGTH_LONG).show();
+                            Toast.makeText(mContext, "Connecting to " + driverName + "...", Toast.LENGTH_LONG).show();
                             mFirebaseAvailableDrivers.child(driverName).child("Dispatch Request").setValue("Connected");
                             mDispatchState = State.CONNECTED;
                         }
@@ -675,7 +676,7 @@ public class MainActivity extends AppCompatActivity
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.getValue() != null) {
-                    if (dataSnapshot.getValue().equals("Cancelled")) {
+                    if (dataSnapshot.getValue().equals("Driver Cancelled")) {
                         // 6. Driver ended dispatch
                         Log.d(DEBUG_ON_CONNECTED, "6. Driver ended dispatch");
                         Toast.makeText(mContext, "Dispatch ended by driver", Toast.LENGTH_LONG).show();
@@ -736,7 +737,7 @@ public class MainActivity extends AppCompatActivity
         if (mDispatchState == State.CONNECTED) {
             // 4 B. Set connected node to "Cancelled" if connected
             Log.d(DEBUG_ON_CANCEL, "4 B. Set connected node to \"Cancelled\" if connected");
-            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue("Cancelled");
+            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue("User Cancelled");
         }
         if (mDispatchRequestKey != null) {
             // 4 C. Remove dispatch request from the database
