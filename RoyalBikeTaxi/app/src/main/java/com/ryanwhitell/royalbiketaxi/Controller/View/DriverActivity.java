@@ -46,9 +46,7 @@ import java.util.Map;
 public class DriverActivity extends AppCompatActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
-    // TODO: LIFECYCLE and CLEAR LISTENERS
-    // TODO: Debug log messages. Canceling dispatch thing still not working
-    // TODO: Quell all warnings
+    // TODO: Check that the app can use the google api, location, maps, and is connected to the internet
 
     /******* VARIABLES *******/
     // Debugging
@@ -143,6 +141,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         mFirebaseUserDispatchRequest = database.getReference("Dispatch Request");
         mFirebaseLocationRequest = database.getReference("Location Request");
 
+
         /******* Initialize Google Api - Location, Map *******/
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
@@ -173,6 +172,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         mEndButton = (Button) findViewById(R.id.end_button);
         assert mEndButton != null;
         mEndButton.setVisibility(View.GONE);
+
 
         /******* Context *******/
         mContext = this;
@@ -213,8 +213,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             @Override
             public void onCancelled(DatabaseError databaseError) {
                 Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
-                // 0 B. Dispatch cancelled from database error 1
-                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 1");
+                // 0. Dispatch cancelled from database error 1
+                Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 1");
                 disconnectFromUser();
             }
         });
@@ -249,15 +249,16 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         // onStop()
         Log.d(DEBUG_ACTIVITY_LC, "onStop()");
 
+        // Remove listeners
         mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").removeEventListener(mMyDispatchRequestListener);
         mFirebaseLocationRequest.removeEventListener(mLocationRequestListener);
 
-        // 0 C. Dispatch cancelled from onStop()
-        Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from onStop()");
+        // 0. Dispatch cancelled from onStop()
+        Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from onStop()");
         disconnectFromUser();
 
+        // Remove self from database, disconnect from the Api Client if connected
         mFirebaseAvailableDrivers.child(mName).removeValue();
-
         mGoogleApiClient.disconnect();
     }
 
@@ -387,8 +388,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                     }
 
                 } else {
-                    // 0 A. Dispatch cancelled from deletion of User Dispatch Request node
-                    Log.d(DEBUG_ON_CANCEL, "0 A. Dispatch cancelled from deletion of User Dispatch Request node");
+                    // 0. Dispatch cancelled from deletion of User Dispatch Request node
+                    Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from deletion of User Dispatch Request node");
                     disconnectFromUser();
                 }
             }
@@ -396,8 +397,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             @Override
             public void onCancelled(DatabaseError databaseError) {
                 Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
-                // 0 B. Dispatch cancelled from database error 4
-                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 4");
+                // 0. Dispatch cancelled from database error 2
+                Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 2");
                 disconnectFromUser();
             }
         });
@@ -407,16 +408,22 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.getValue() != null) {
                     if (dataSnapshot.getValue().equals("User Cancelled")) {
+                        // 0. Dispatch cancelled from user
+                        Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from user");
                         disconnectFromUser();
                     }
+                } else {
+                    // 0. Dispatch cancelled from deletion of User Dispatch Request "Connected" node
+                    Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from deletion of User Dispatch Request \"Connected\" node");
+                    disconnectFromUser();
                 }
             }
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
                 Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
-                // 0 B. Dispatch cancelled from database error 5
-                Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 5");
+                // 0. Dispatch cancelled from database error 3
+                Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 3");
                 disconnectFromUser();
             }
         });
@@ -434,10 +441,15 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             // 3. Remove event listeners, clear the map, request driver locations
             Log.d(DEBUG_ON_CANCEL, "3. Remove event listeners, clear the map, request driver locations");
-            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).removeEventListener(mTrackUserListener);
-            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").removeEventListener(mUserConnectionListener);
-            mMap.clear();
+            if (mTrackUserListener != null) {
+                mFirebaseUserDispatchRequest.child(mDispatchRequestKey).removeEventListener(mTrackUserListener);
 
+            }
+            if (mFirebaseAvailableDrivers != null) {
+                mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").removeEventListener(mUserConnectionListener);
+
+            }
+            mMap.clear();
             requestDriverLocations();
         }
     }
@@ -446,6 +458,9 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         // 1. Notify user that the driver has ended the ride or cancelled
         Log.d(DEBUG_ON_CANCEL, "1. Notify user that the driver has ended the ride or cancelled");
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue("Driver Cancelled");
+
+        // 0. Dispatch cancelled by driver on button click
+        Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled by driver on button click");
         disconnectFromUser();
     }
 
