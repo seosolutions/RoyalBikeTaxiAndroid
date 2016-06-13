@@ -59,6 +59,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
     // Alerts
     private AlertDialog.Builder mIncomingDispatchAlert;
+    private AlertDialog mIncomingDispatchAlertInstance;
 
     // Driver Information
     private String mName;
@@ -198,7 +199,13 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                         // 1. Incoming dispatch request
                         Log.d(DEBUG_DISPATCH_REQUEST, "1. Incoming dispatch request");
                         mDispatchRequestKey = dataSnapshot.getValue().toString();
-                        mIncomingDispatchAlert.create().show();
+                        mIncomingDispatchAlertInstance = mIncomingDispatchAlert.create();
+                        mIncomingDispatchAlertInstance.show();
+                    }
+                } else {
+                    if (mIncomingDispatchAlertInstance != null) {
+                        mIncomingDispatchAlertInstance.dismiss();
+                        updateMyMarker(mLastKnownLocation);
                     }
                 }
             }
@@ -248,6 +255,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         // 0 C. Dispatch cancelled from onStop()
         Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from onStop()");
         disconnectFromUser();
+
+        mFirebaseAvailableDrivers.child(mName).removeValue();
 
         mGoogleApiClient.disconnect();
     }
