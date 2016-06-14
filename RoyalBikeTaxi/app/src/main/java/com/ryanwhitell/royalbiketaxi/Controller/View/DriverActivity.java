@@ -47,6 +47,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
     // TODO: Check that the app can use the google api, location, maps, and is connected to the internet
+    // TODO: More lifecycle things, backround services, clean unnecessary code
 
     /******* VARIABLES *******/
     // Debugging

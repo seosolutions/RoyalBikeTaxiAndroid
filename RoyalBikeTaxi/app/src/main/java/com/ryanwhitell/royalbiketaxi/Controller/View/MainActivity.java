@@ -63,6 +63,7 @@ public class MainActivity extends AppCompatActivity
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
     // TODO: Check that the app can use the google api, location, maps, and is connected to the internet
+    // TODO: More lifecycle things, backround services, clean unnecessary code
 
     /******* VARIABLES *******/
     // Debugging
@@ -302,7 +303,6 @@ public class MainActivity extends AppCompatActivity
 
         // Remove user dispatch request listener
         mFirebaseUserDispatchRequest.removeEventListener(mListenerUserDispatchRequest);
-
     }
 
 
@@ -764,6 +764,8 @@ public class MainActivity extends AppCompatActivity
             mFirebaseUserDispatchRequest.removeEventListener(mListenerTrackDriver);
         }
 
+        // 5. Change state to idle
+        Log.d(DEBUG_ON_CANCEL, "5. Change state to idle");
         mDispatchState = State.IDLE;
     }
 
