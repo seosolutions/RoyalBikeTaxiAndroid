@@ -133,7 +133,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
         Intent intent = getIntent();
         mName = intent.getStringExtra("name");
-        mNumber = intent.getStringExtra("number");
+        mNumber = intent.getStringExtra("phoneNumber");
 
 
         /******* Initialize Firebase *******/
@@ -238,9 +238,9 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
             }
         });
 
-        // 3. Set phone number in database
-        Log.d(DEBUG_SIGN_IN, "3. Set phone number in database");
-        mFirebaseAvailableDrivers.child(mName).child("phone number").setValue(mNumber);
+        // 3. Set phoneNumber in database
+        Log.d(DEBUG_SIGN_IN, "3. Set phoneNumber in database");
+        mFirebaseAvailableDrivers.child(mName).child("phoneNumber").setValue(mNumber);
     }
 
     @Override
@@ -281,7 +281,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         if ((mLastKnownLocation != null) && (mDispatchState == State.AVAILABLE)) {
             mFirebaseAvailableDrivers.child(mName).child("latitude").setValue(mLastKnownLocation.getLatitude());
             mFirebaseAvailableDrivers.child(mName).child("longitude").setValue(mLastKnownLocation.getLongitude());
-            mFirebaseAvailableDrivers.child(mName).child("phone number").setValue(mNumber);
+            mFirebaseAvailableDrivers.child(mName).child("phoneNumber").setValue(mNumber);
         }
 
         // 6. Update the map
@@ -308,7 +308,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                                     .position(new LatLng(Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString()),
                                             Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString())))
                                     .title(driver.getKey())
-                                    .snippet(((Map<String, Object>) driver.getValue()).get("phone number").toString())
+                                    .snippet(((Map<String, Object>) driver.getValue()).get("phoneNumber").toString())
                                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
                         }
                     }
@@ -353,7 +353,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         Log.d(DEBUG_DISPATCH_REQUEST, "7. Remove self from \"Available Drivers,\" update information, set state to \"On Dispatch\"");
         mFirebaseAvailableDrivers.child(mName).removeValue();
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("name").setValue(mName);
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("number").setValue(mNumber);
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("phoneNumber").setValue(mNumber);
         mDispatchState = State.ON_DISPATCH;
         mGoogleApiClient.connect();
 

@@ -1,5 +1,6 @@
 package com.ryanwhitell.royalbiketaxi.Controller.View;
 
+import android.content.Context;
 import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -15,10 +16,20 @@ import com.google.firebase.database.ValueEventListener;
 import com.ryanwhitell.royalbiketaxi.R;
 import com.ryanwhitell.royalbiketaxi.Controller.Model.Driver;
 
+import java.util.ArrayList;
+import java.util.Map;
+
 public class LoginActivity extends AppCompatActivity {
 
-    // Driver array
-    Driver[] mDrivers;
+    // Login fields
+    EditText mName;
+    EditText mPassword;
+
+    //Driver list
+    ArrayList<Driver> mDrivers;
+
+    //Context
+    private Context mContext;
 
     /******* ACTIVITY LIFECYCLE *******/
     @Override
@@ -26,49 +37,70 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
+        mName = (EditText) findViewById(R.id.text_view_name);
+        mPassword = (EditText) findViewById(R.id.text_view_password);
+
+        mDrivers = new ArrayList<>();
+
+        mContext = this;
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+
         // Initialize Database and driver array
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         DatabaseReference databaseRefDrivers = database.getReference("Drivers");
         databaseRefDrivers.addListenerForSingleValueEvent(new ValueEventListener() {
+            @SuppressWarnings("unchecked")
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                int numberOfDrivers = (int) dataSnapshot.getChildrenCount();
-                mDrivers = new Driver[numberOfDrivers];
+                if (dataSnapshot.getValue() != null) {
 
-                for (int i = 0; i < numberOfDrivers; i++) {
-                    mDrivers[i] = dataSnapshot.child(Integer.toString(i)).getValue(Driver.class);
+                    Map<String, Object> drivers = (Map<String, Object>) dataSnapshot.getValue();
+
+                    for (Map.Entry<String, Object> driver: drivers.entrySet()) {
+                        Driver newDriver = new Driver(driver.getKey(),
+                                ((Map<String, Object>) driver.getValue()).get("password").toString(),
+                                ((Map<String, Object>) driver.getValue()).get("phoneNumber").toString());
+
+                        mDrivers.add(newDriver);
+                    }
+                } else {
+                    mDrivers = null;
                 }
             }
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                //TODO: Handle. Check the docks
+                Toast.makeText(mContext, "There was a database error", Toast.LENGTH_LONG).show();
             }
         });
-
     }
 
     /******* LOGIN LOGIC *******/
     public void login(View view) {
 
-        // Initialize text fields
-        EditText eName = (EditText) findViewById(R.id.text_view_name);
-        EditText ePass = (EditText) findViewById(R.id.text_view_password);
-        String name = eName.getText().toString();
-        String pass = ePass.getText().toString();
-        String number = getNumber(name);
+        String name = mName.getText().toString();
+        String pass = mPassword.getText().toString();
 
-        if (checkName(name)) {
-            if (checkPassword(pass, name)) {
-                Intent intent = new Intent(this, DriverActivity.class);
-                intent.putExtra("name", name);
-                intent.putExtra("number", number);
-                startActivity(intent);
+        if (mDrivers != null) {
+            if (checkName(name)) {
+                if (checkPassword(pass, name)) {
+                    Intent intent = new Intent(this, DriverActivity.class);
+                    intent.putExtra("name", name);
+                    String number = getNumber(name);
+                    intent.putExtra("phoneNumber", number);
+                    startActivity(intent);
+                } else {
+                    Toast.makeText(this, "Invalid Password", Toast.LENGTH_LONG).show();
+                }
             } else {
-                Toast.makeText(this, "Invalid Password", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Invalid Name", Toast.LENGTH_LONG).show();
             }
         } else {
-            Toast.makeText(this, "Invalid Name", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "There are no drivers in the database", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -93,7 +125,7 @@ public class LoginActivity extends AppCompatActivity {
     public String getNumber(String name) {
         for (Driver driver : mDrivers) {
             if (name.equals(driver.getName())) {
-                return driver.getNumber();
+                return driver.getPhoneNumber();
             }
         }
         return "0000000000";

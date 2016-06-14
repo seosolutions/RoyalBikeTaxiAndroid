@@ -408,7 +408,7 @@ public class MainActivity extends AppCompatActivity
                                 .position(new LatLng(Double.parseDouble(((Map<String, Object>) driver.getValue()).get("latitude").toString()),
                                         Double.parseDouble(((Map<String, Object>) driver.getValue()).get("longitude").toString())))
                                 .title(driver.getKey())
-                                .snippet(((Map<String, Object>) driver.getValue()).get("phone number").toString())
+                                .snippet(((Map<String, Object>) driver.getValue()).get("phoneNumber").toString())
                                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW)));
                     }
                 }
@@ -652,11 +652,11 @@ public class MainActivity extends AppCompatActivity
                     if ((driverInfo.get("latitude") != null) &&
                     (driverInfo.get("longitude") != null) &&
                             (driverInfo.get("name") != null) &&
-                            (driverInfo.get("number") != null)) {
+                            (driverInfo.get("phoneNumber") != null)) {
                         mDriverLocationMarker = mMap.addMarker(new MarkerOptions()
                                 .position(new LatLng((Double) driverInfo.get("latitude"), (Double) driverInfo.get("longitude")))
                                 .title((String) driverInfo.get("name"))
-                                .snippet((String) driverInfo.get("number"))
+                                .snippet((String) driverInfo.get("phoneNumber"))
                                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
                     }
                 } else {

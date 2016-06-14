@@ -7,15 +7,15 @@ public class Driver {
 
     public String name;
     public String password;
-    public String number;
+    public String phoneNumber;
 
     public Driver() {
     }
 
-    public Driver(String name, String password, String number) {
+    public Driver(String name, String password, String phoneNumber) {
         this.name = name;
         this.password = password;
-        this.number = number;
+        this.phoneNumber = phoneNumber;
     }
 
     public String getName() {
@@ -34,11 +34,11 @@ public class Driver {
         this.password = password;
     }
 
-    public String getNumber() {
-        return number;
+    public String getPhoneNumber() {
+        return phoneNumber;
     }
 
-    public void setNumber(String number) {
-        this.number = number;
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 }
