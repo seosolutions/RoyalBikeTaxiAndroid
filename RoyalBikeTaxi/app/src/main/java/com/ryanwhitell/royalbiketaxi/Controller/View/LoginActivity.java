@@ -28,9 +28,6 @@ public class LoginActivity extends AppCompatActivity {
     //Driver list
     ArrayList<Driver> mDrivers;
 
-    //Context
-    private Context mContext;
-
     /******* ACTIVITY LIFECYCLE *******/
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,8 +38,6 @@ public class LoginActivity extends AppCompatActivity {
         mPassword = (EditText) findViewById(R.id.text_view_password);
 
         mDrivers = new ArrayList<>();
-
-        mContext = this;
     }
 
     @Override
@@ -74,7 +69,7 @@ public class LoginActivity extends AppCompatActivity {
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "There was a database error", Toast.LENGTH_LONG).show();
+                Toast.makeText(getApplicationContext(), "There was a database error!", Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -94,13 +89,13 @@ public class LoginActivity extends AppCompatActivity {
                     intent.putExtra("phoneNumber", number);
                     startActivity(intent);
                 } else {
-                    Toast.makeText(this, "Invalid Password", Toast.LENGTH_LONG).show();
+                    Toast.makeText(getApplicationContext(), "Invalid password", Toast.LENGTH_LONG).show();
                 }
             } else {
-                Toast.makeText(this, "Invalid Name", Toast.LENGTH_LONG).show();
+                Toast.makeText(getApplicationContext(), "Invalid name", Toast.LENGTH_LONG).show();
             }
         } else {
-            Toast.makeText(this, "There are no drivers in the database", Toast.LENGTH_LONG).show();
+            Toast.makeText(getApplicationContext(), "There are no drivers in the database", Toast.LENGTH_LONG).show();
         }
     }
 

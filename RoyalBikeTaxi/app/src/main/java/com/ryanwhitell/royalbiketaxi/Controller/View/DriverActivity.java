@@ -1,7 +1,6 @@
 package com.ryanwhitell.royalbiketaxi.Controller.View;
 
 import android.Manifest;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -59,14 +58,12 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     // Alerts
     private AlertDialog.Builder mIncomingDispatchAlert;
     private AlertDialog mIncomingDispatchAlertInstance;
+    private Toast mToast;
 
     // Driver Information
     private String mName;
     private String mNumber;
     private Location mLastKnownLocation;
-
-    // Context
-    private Context mContext;
 
     // Firebase
     private DatabaseReference mFirebaseAvailableDrivers;
@@ -174,9 +171,6 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         assert mEndButton != null;
         mEndButton.setVisibility(View.GONE);
 
-
-        /******* Context *******/
-        mContext = this;
     }
 
     @Override
@@ -213,7 +207,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Dispatch cancelled. There was a database error!");
                 // 0. Dispatch cancelled from database error 1
                 Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 1");
                 disconnectFromUser();
@@ -234,7 +228,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Could not handle location request. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Could not handle location request. There was a database error!");
             }
         });
 
@@ -261,6 +255,20 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         // Remove self from database, disconnect from the Api Client if connected
         mFirebaseAvailableDrivers.child(mName).removeValue();
         mGoogleApiClient.disconnect();
+    }
+
+    /******* Alerts *******/
+    public void showToast(String message) {
+        if ((mToast != null) && (mToast.getView().getWindowVisibility() == View.VISIBLE)) {
+            mToast.cancel();
+            mToast = Toast.makeText(getApplicationContext(),
+                    message, Toast.LENGTH_LONG);
+            mToast.show();
+        } else {
+            mToast = Toast.makeText(getApplicationContext(),
+                    message, Toast.LENGTH_LONG);
+            mToast.show();
+        }
     }
 
 
@@ -317,7 +325,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Could not update map. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Could not update map. There was a database error!");
             }
         });
     }
@@ -389,6 +397,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                     }
 
                 } else {
+                    showToast("Dispatch cancelled!");
                     // 0. Dispatch cancelled from deletion of User Dispatch Request node
                     Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from deletion of User Dispatch Request node");
                     disconnectFromUser();
@@ -397,7 +406,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Dispatch cancelled. There was a database error!");
                 // 0. Dispatch cancelled from database error 2
                 Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 2");
                 disconnectFromUser();
@@ -422,7 +431,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Dispatch cancelled. There was a database error!");
                 // 0. Dispatch cancelled from database error 3
                 Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 3");
                 disconnectFromUser();
@@ -456,6 +465,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     }
 
     public void onEndButtonClick(View view) {
+        showToast("Dispatch ended");
+
         // 1. Notify user that the driver has ended the ride or cancelled
         Log.d(DEBUG_ON_CANCEL, "1. Notify user that the driver has ended the ride or cancelled");
         mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue("Driver Cancelled");

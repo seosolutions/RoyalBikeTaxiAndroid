@@ -1,7 +1,6 @@
 package com.ryanwhitell.royalbiketaxi.Controller.View;
 
 import android.Manifest;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -78,6 +77,7 @@ public class MainActivity extends AppCompatActivity
     private AlertDialog.Builder mOutOfBoundsAlert;
     private AlertDialog.Builder mNoAvailableDriversAlert;
     private ProgressBar mActivityWheel;
+    private Toast mToast;
 
     // Firebase
     private DatabaseReference mFirebaseUserDispatchRequest;
@@ -110,12 +110,10 @@ public class MainActivity extends AppCompatActivity
     private FloatingActionButton mFab;
     private Boolean mActionBarButtonState;
 
-    // Runnable, Handler, Context
+    // Runnable, Handler
     private int mNumberOfDrivers;
     private int mIndex;
     private Handler mHandler;
-    private Context mContext;
-
 
     /******* ACTIVITY LIFECYCLE *******/
     @Override
@@ -254,8 +252,7 @@ public class MainActivity extends AppCompatActivity
         mActionBarButtonState = true;
 
 
-        /******* Initialize Runnable, Handler, Context  *******/
-        mContext = this;
+        /******* Initialize Runnable, Handler *******/
         mHandler = new Handler();
     }
 
@@ -275,7 +272,7 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Dispatch cancelled. There was a database error!");
                 // 0. Dispatch cancelled from database error 1
                 Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 1");
                 destroyDispatchRequest();
@@ -303,6 +300,21 @@ public class MainActivity extends AppCompatActivity
 
         // Remove user dispatch request listener
         mFirebaseUserDispatchRequest.removeEventListener(mListenerUserDispatchRequest);
+    }
+
+
+    /******* ALERTS *******/
+    public void showToast(String message) {
+        if ((mToast != null) && (mToast.getView().getWindowVisibility() == View.VISIBLE)) {
+            mToast.cancel();
+            mToast = Toast.makeText(getApplicationContext(),
+                    message, Toast.LENGTH_LONG);
+            mToast.show();
+        } else {
+            mToast = Toast.makeText(getApplicationContext(),
+                    message, Toast.LENGTH_LONG);
+            mToast.show();
+        }
     }
 
 
@@ -416,7 +428,7 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Could not update map. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Could not update map. There was a database error!");
             }
         });
     }
@@ -440,7 +452,7 @@ public class MainActivity extends AppCompatActivity
         mFab.setVisibility(View.GONE);
         //getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         mActionBarButtonState = false;
-        Toast.makeText(mContext, "Locating drivers...", Toast.LENGTH_LONG).show();
+        showToast("Locating drivers...");
 
         // 2. Refresh all driver locations
         Log.d(DEBUG_REQUEST_DISPATCH, "2. Refresh all driver locations");
@@ -505,7 +517,7 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Dispatch Cancelled. There was a database error!");
                 // 0. Dispatch cancelled from database error 3
                 Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 3");
                 destroyDispatchRequest();
@@ -529,12 +541,12 @@ public class MainActivity extends AppCompatActivity
                         if (mDispatchState == State.CONNECTED) {
                             // 13. Connected to driver, quit runnable, track driver
                             Log.d(DEBUG_REQUEST_DISPATCH, "13. Connected to driver, quit runnable");
-                            Toast.makeText(mContext, "Connected!", Toast.LENGTH_LONG).show();
+                            showToast("Connected!");
                             onConnectedToDriver();
                         } else if (mDispatchState == State.SEARCHING) {
                             // 12 C1. Driver has not responded, request next closest driver
                             Log.d(DEBUG_REQUEST_DISPATCH, "12 C1. Driver has not responded, request next closest driver");
-                            Toast.makeText(mContext, "Driver declined - trying next closest driver...", Toast.LENGTH_LONG).show();
+                            showToast("Driver declined. Trying next closest driver...");
                             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
                             mIndex++;
                             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).getName()).child("Dispatch Request").setValue(mDispatchRequestKey);
@@ -557,7 +569,7 @@ public class MainActivity extends AppCompatActivity
 
             // 11. Request nearest available driver and provide 10 seconds for response
             Log.d(DEBUG_REQUEST_DISPATCH, "11. Request nearest available driver and provide 10 seconds for response");
-            Toast.makeText(mContext, "Contacting nearest driver...", Toast.LENGTH_LONG).show();
+            showToast("Contacting nearest driver...");
             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).getName()).child("Dispatch Request").setValue(mDispatchRequestKey);
             mHandler.postDelayed(waitForResponse, 10000);
         }
@@ -602,7 +614,7 @@ public class MainActivity extends AppCompatActivity
                             // 12 A. Driver has responded, send connect request, update state to "connected"
                             Log.d(DEBUG_REQUEST_DISPATCH, "12 A. Driver has responded, send connect request, update state to \"connected\"");
                             String driverName = request.getValue().toString();
-                            Toast.makeText(mContext, "Connecting to " + driverName + "...", Toast.LENGTH_LONG).show();
+                            showToast("Connecting to " + driverName + "...");
                             mFirebaseAvailableDrivers.child(driverName).child("Dispatch Request").setValue("Connected");
                             mDispatchState = State.CONNECTED;
                         }
@@ -668,7 +680,7 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Dispatch cancelled. There was a database error!");
                 // 0 B. Dispatch cancelled from database error 4
                 Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 4");
                 destroyDispatchRequest();
@@ -684,7 +696,7 @@ public class MainActivity extends AppCompatActivity
                     if (dataSnapshot.getValue().equals("Driver Cancelled")) {
                         // 6. Driver ended dispatch
                         Log.d(DEBUG_ON_CONNECTED, "6. Driver ended dispatch");
-                        Toast.makeText(mContext, "Dispatch ended by driver", Toast.LENGTH_LONG).show();
+                        showToast("Dispatch ended by driver");
                         mDispatchState = State.IDLE;
 
                         // 0 D. Dispatch ended from driver
@@ -696,7 +708,7 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                Toast.makeText(mContext, "Dispatch Cancelled. There was a database error!", Toast.LENGTH_LONG).show();
+                showToast("Dispatch cancelled. There was a database error!");
                 // 0 B. Dispatch cancelled from database error 5
                 Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 5");
                 destroyDispatchRequest();
@@ -717,7 +729,7 @@ public class MainActivity extends AppCompatActivity
         // 1. Change dispatch state to "not requesting a dispatch"
         Log.d(DEBUG_ON_CANCEL, "1. Change dispatch state to \"not requesting a dispatch\"");
         if (mDispatchState != State.IDLE) {
-            Toast.makeText(mContext, "Dispatch Cancelled!", Toast.LENGTH_LONG).show();
+            showToast("Dispatch cancelled!");
         }
 
         // 2. Show fab and hide dispatch request state views, enable action bar buttons
