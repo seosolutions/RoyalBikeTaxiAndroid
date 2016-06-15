@@ -1,4 +1,4 @@
-package com.ryanwhitell.royalbiketaxi.Controller.Activities;
+package com.ryanwhitell.royalbiketaxi.controller.activities;
 
 import android.Manifest;
 import android.content.DialogInterface;
@@ -48,7 +48,7 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
-import com.ryanwhitell.royalbiketaxi.Controller.Models.DriverLocation;
+import com.ryanwhitell.royalbiketaxi.controller.models.DriverLocation;
 import com.ryanwhitell.royalbiketaxi.R;
 
 import java.util.ArrayList;
@@ -73,9 +73,6 @@ public class MainActivity extends AppCompatActivity
     private final String DEBUG_ACTIVITY_LC = "Lifecycle";
 
     // Alerts
-    private AlertDialog.Builder mConfirmDispatchAlert;
-    private AlertDialog.Builder mOutOfBoundsAlert;
-    private AlertDialog.Builder mNoAvailableDriversAlert;
     private ProgressBar mActivityWheel;
     private Toast mToast;
 
@@ -83,10 +80,10 @@ public class MainActivity extends AppCompatActivity
     private DatabaseReference mFirebaseUserDispatchRequest;
     private DatabaseReference mFirebaseAvailableDrivers;
     private DatabaseReference mFirebaseLocationRequest;
-    private String mDispatchRequestKey;
     private ValueEventListener mListenerUserDispatchRequest;
     private ValueEventListener mListenerTrackDriver;
     private ValueEventListener mListenerUserDriverConnection;
+    private String mDispatchRequestKey;
 
     // Flow Control
     private boolean mBoundsDisplayed;
@@ -121,78 +118,17 @@ public class MainActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // onCreate()
-        Log.d(DEBUG_ACTIVITY_LC, "onCreate()");
+        // 1. onCreate()
+        Log.d(DEBUG_ACTIVITY_LC, "1. onCreate()");
 
 
         // DEBUGGING keep screen alive
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
 
-        /******* Initialize Alerts *******/
-        mConfirmDispatchAlert = new AlertDialog.Builder(this)
-                .setTitle("Confirm Dispatch to My Location")
-                .setMessage(
-                        "By clicking CONFIRM you agree " +
-                                "to accepting a ride from our nearest " +
-                                "driver. A bike will be dispatched to your " +
-                                "location, please wait in a convenient pickup " +
-                                "location and do not navigate away " +
-                                "from the current screen. Thank you!")
-                .setPositiveButton("CONFIRM", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        confirmDispatch();
-                    }
-                })
-                .setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                });
-
-        mOutOfBoundsAlert = new AlertDialog.Builder(this)
-                .setTitle("Out of Bounds Alert")
-                .setMessage(
-                        "You are currently trying to request " +
-                                "a dispatch outside of our " +
-                                "operating boundaries. To view boundaries, click " +
-                                "TOGGLE BOUNDS")
-                .setPositiveButton("TOGGLE BOUNDS", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        toggleBoundaries();
-                    }
-                })
-                .setNegativeButton("BACK", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                });
-
-        mNoAvailableDriversAlert = new AlertDialog.Builder(this)
-                .setTitle("No Drivers Available")
-                .setMessage(
-                        "No drivers are currently available, " +
-                                "please call dispatch to set up a " +
-                                "ride or try again in a few minuets."
-                ).setPositiveButton("CALL", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        //TODO: call dispatch
-                    }
-                })
-                .setNegativeButton("BACK", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                });
-
-
         /******* Initialize Firebase *******/
+        // 2. Initialize Firebase
+        Log.d(DEBUG_ACTIVITY_LC, "2. Initialize Firebase");
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         mFirebaseAvailableDrivers = database.getReference("Available Drivers");
         mFirebaseLocationRequest = database.getReference("Location Request");
@@ -200,12 +136,16 @@ public class MainActivity extends AppCompatActivity
 
 
         /******* Initialize Flow Control *******/
+        // 3. Initialize Flow Control
+        Log.d(DEBUG_ACTIVITY_LC, "3. Initialize Flow Control");
         mBoundsDisplayed = false;
         mDriverClickCounter = 1;
         mDispatchState = State.IDLE;
 
 
         /******* Initialize Google Api - Location, Map *******/
+        // 4. Initialize Google Api - Location, Map
+        Log.d(DEBUG_ACTIVITY_LC, "4. Initialize Google Api - Location, Map");
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
@@ -220,6 +160,8 @@ public class MainActivity extends AppCompatActivity
 
 
         /******* Initialize Navigation *******/
+        // 5. Initialize Navigation
+        Log.d(DEBUG_ACTIVITY_LC, "5. Initialize Navigation");
         mCancelDispatch = (Button) findViewById(R.id.cancel__dispatch_button);
         assert mCancelDispatch != null;
         mCancelDispatch.setVisibility(View.GONE);
@@ -251,19 +193,17 @@ public class MainActivity extends AppCompatActivity
 
         mActionBarButtonState = true;
 
-
-        /******* Initialize Runnable, Handler *******/
-        mHandler = new Handler();
     }
 
     @Override
     protected void onStart() {
         super.onStart();
 
-        // onStart()
-        Log.d(DEBUG_ACTIVITY_LC, "onStart()");
+        // 6. onStart()
+        Log.d(DEBUG_ACTIVITY_LC, "6. onStart()");
 
-        // Initialize user dispatch request listener
+        // 7. listen for dispatch request
+        Log.d(DEBUG_ACTIVITY_LC, "7. listen for dispatch request");
         mListenerUserDispatchRequest = mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
@@ -272,39 +212,84 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                showToast("Dispatch cancelled. There was a database error!");
+                toastBuilder("Dispatch cancelled. There was a database error!");
                 // 0. Dispatch cancelled from database error 1
                 Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 1");
                 destroyDispatchRequest();
             }
         });
 
-        // Connect to the api client
+        // 8. Connect to the api client
+        Log.d(DEBUG_ACTIVITY_LC, "8. Connect to the api client");
         mGoogleApiClient.connect();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 9. onResume()
+        Log.d(DEBUG_ACTIVITY_LC, "9. onResume()");
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        // 10. onPause()
+        Log.d(DEBUG_ACTIVITY_LC, "10. onPause()");
+
+        // 11. Destroy dispatch request if not IDLE
+        Log.d(DEBUG_ACTIVITY_LC, "11. Destroy dispatch request if not IDLE");
+        if (mDispatchState != State.IDLE) {
+            // Destroy any dispatch requests
+            // 0. Dispatch cancelled from onDestroy()
+            Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from onDestroy()");
+            // 11A. Destroying dispatch request
+            Log.d(DEBUG_ACTIVITY_LC, "11A. Destroying dispatch request");
+            destroyDispatchRequest();
+        }
+
     }
 
     @Override
     protected void onStop() {
         super.onStop();
 
-        // onStop()
-        Log.d(DEBUG_ACTIVITY_LC, "onStop()");
+        // 12. onStop()
+        Log.d(DEBUG_ACTIVITY_LC, "12. onStop()");
 
-        // Disconnect the api client
-        mGoogleApiClient.disconnect();
+        // 13. Clear map
+        Log.d(DEBUG_ACTIVITY_LC, "13. Clear map");
+        if (mMap != null) {
+            mMap.clear();
+        }
 
-        // Destroy any dispatch requests
-        // 0. Dispatch cancelled from onStop()
-        Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from onStop()");
-        destroyDispatchRequest();
+        // 14. Remove user dispatch request listener
+        Log.d(DEBUG_ACTIVITY_LC, "14. Remove user dispatch request listener");
+        if (mFirebaseUserDispatchRequest != null) {
+            if (mListenerUserDispatchRequest != null) {
+                mFirebaseUserDispatchRequest.removeEventListener(mListenerUserDispatchRequest);
+            }
+        }
 
-        // Remove user dispatch request listener
-        mFirebaseUserDispatchRequest.removeEventListener(mListenerUserDispatchRequest);
+        // 15. Disconnect the api client
+        Log.d(DEBUG_ACTIVITY_LC, "15. Disconnect the api client");
+        if (mGoogleApiClient.isConnected()) {
+            mGoogleApiClient.disconnect();
+        }
+
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // 16. onDestroy()
+        Log.d(DEBUG_ACTIVITY_LC, "16. onDestroy()");
     }
 
 
     /******* ALERTS *******/
-    public void showToast(String message) {
+    public void toastBuilder(String message) {
         if ((mToast != null) && (mToast.getView().getWindowVisibility() == View.VISIBLE)) {
             mToast.cancel();
             mToast = Toast.makeText(getApplicationContext(),
@@ -314,6 +299,71 @@ public class MainActivity extends AppCompatActivity
             mToast = Toast.makeText(getApplicationContext(),
                     message, Toast.LENGTH_LONG);
             mToast.show();
+        }
+    }
+
+    public void alertPicker(int which) {
+        if (which == 1) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Confirm Dispatch to My Location")
+                    .setMessage(
+                            "By clicking CONFIRM you agree " +
+                                    "to accepting a ride from our nearest " +
+                                    "driver. A bike will be dispatched to your " +
+                                    "location, please wait in a convenient pickup " +
+                                    "location and do not navigate away " +
+                                    "from the current screen. Thank you!")
+                    .setPositiveButton("CONFIRM", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            confirmDispatch();
+                        }
+                    })
+                    .setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            dialog.dismiss();
+                        }
+                    }).create().show();
+        } else if (which == 2) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Out of Bounds Alert")
+                    .setMessage(
+                            "You are currently trying to request " +
+                                    "a dispatch outside of our " +
+                                    "operating boundaries. To view boundaries, click " +
+                                    "TOGGLE BOUNDS")
+                    .setPositiveButton("TOGGLE BOUNDS", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            toggleBoundaries();
+                        }
+                    })
+                    .setNegativeButton("BACK", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            dialog.dismiss();
+                        }
+                    }).create().show();
+        } else if (which == 3) {
+            new AlertDialog.Builder(this)
+                    .setTitle("No Drivers Available")
+                    .setMessage(
+                            "No drivers are currently available, " +
+                                    "please call dispatch to set up a " +
+                                    "ride or try again in a few minuets."
+                    ).setPositiveButton("CALL", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            //TODO: call dispatch
+                        }
+                    })
+                    .setNegativeButton("BACK", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            dialog.dismiss();
+                        }
+                    }).create().show();
         }
     }
 
@@ -428,19 +478,19 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                showToast("Could not update map. There was a database error!");
+                toastBuilder("Could not update map. There was a database error!");
             }
         });
     }
 
     // Request a dispatch
     public void onClickFab(View view){
-        if (withinBounds()) {
-            mConfirmDispatchAlert.create();
-            mConfirmDispatchAlert.show();
-        } else {
-            mOutOfBoundsAlert.create();
-            mOutOfBoundsAlert.show();
+        if (mLocationMarker != null) {
+            if (withinBounds()) {
+                alertPicker(1);
+            } else {
+                alertPicker(2);
+            }
         }
     }
 
@@ -452,7 +502,7 @@ public class MainActivity extends AppCompatActivity
         mFab.setVisibility(View.GONE);
         //getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         mActionBarButtonState = false;
-        showToast("Locating drivers...");
+        toastBuilder("Locating drivers...");
 
         // 2. Refresh all driver locations
         Log.d(DEBUG_REQUEST_DISPATCH, "2. Refresh all driver locations");
@@ -508,7 +558,7 @@ public class MainActivity extends AppCompatActivity
                     // 3 B. No drivers are currently available
                     Log.d(DEBUG_REQUEST_DISPATCH, "3 B. No drivers are currently available");
                     mDispatchState = State.IDLE;
-                    mNoAvailableDriversAlert.create().show();
+                    alertPicker(3);
                     // 0. Dispatch ended from unavailable drivers
                     Log.d(DEBUG_ON_CANCEL, "0. Dispatch ended from unavailable drivers");
                     destroyDispatchRequest();
@@ -517,7 +567,7 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                showToast("Dispatch Cancelled. There was a database error!");
+                toastBuilder("Dispatch Cancelled. There was a database error!");
                 // 0. Dispatch cancelled from database error 3
                 Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 3");
                 destroyDispatchRequest();
@@ -528,6 +578,7 @@ public class MainActivity extends AppCompatActivity
     public void searchForDriver() {
         if (mDispatchState == State.SEARCHING) {
 
+            mHandler = new Handler();
             mNumberOfDrivers = mDriverLocations.size();
             mIndex = 0;
 
@@ -541,12 +592,12 @@ public class MainActivity extends AppCompatActivity
                         if (mDispatchState == State.CONNECTED) {
                             // 13. Connected to driver, quit runnable, track driver
                             Log.d(DEBUG_REQUEST_DISPATCH, "13. Connected to driver, quit runnable");
-                            showToast("Connected!");
+                            toastBuilder("Connected!");
                             onConnectedToDriver();
                         } else if (mDispatchState == State.SEARCHING) {
                             // 12 C1. Driver has not responded, request next closest driver
                             Log.d(DEBUG_REQUEST_DISPATCH, "12 C1. Driver has not responded, request next closest driver");
-                            showToast("Driver declined. Trying next closest driver...");
+                            toastBuilder("Driver declined. Trying next closest driver...");
                             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
                             mIndex++;
                             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).getName()).child("Dispatch Request").setValue(mDispatchRequestKey);
@@ -557,7 +608,7 @@ public class MainActivity extends AppCompatActivity
                             // 12 C2. No drivers are currently available
                             Log.d(DEBUG_REQUEST_DISPATCH, "12 C2. No drivers are currently available");
                             mDispatchState = State.IDLE;
-                            mNoAvailableDriversAlert.create().show();
+                            alertPicker(3);
                             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
                             // 0. Dispatch ended from unresponsive drivers
                             Log.d(DEBUG_ON_CANCEL, "0. Dispatch ended from unresponsive drivers");
@@ -569,7 +620,7 @@ public class MainActivity extends AppCompatActivity
 
             // 11. Request nearest available driver and provide 10 seconds for response
             Log.d(DEBUG_REQUEST_DISPATCH, "11. Request nearest available driver and provide 10 seconds for response");
-            showToast("Contacting nearest driver...");
+            toastBuilder("Contacting nearest driver...");
             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).getName()).child("Dispatch Request").setValue(mDispatchRequestKey);
             mHandler.postDelayed(waitForResponse, 10000);
         }
@@ -614,7 +665,7 @@ public class MainActivity extends AppCompatActivity
                             // 12 A. Driver has responded, send connect request, update state to "connected"
                             Log.d(DEBUG_REQUEST_DISPATCH, "12 A. Driver has responded, send connect request, update state to \"connected\"");
                             String driverName = request.getValue().toString();
-                            showToast("Connecting to " + driverName + "...");
+                            toastBuilder("Connecting to " + driverName + "...");
                             mFirebaseAvailableDrivers.child(driverName).child("Dispatch Request").setValue("Connected");
                             mDispatchState = State.CONNECTED;
                         }
@@ -680,7 +731,7 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                showToast("Dispatch cancelled. There was a database error!");
+                toastBuilder("Dispatch cancelled. There was a database error!");
                 // 0 B. Dispatch cancelled from database error 4
                 Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 4");
                 destroyDispatchRequest();
@@ -696,7 +747,7 @@ public class MainActivity extends AppCompatActivity
                     if (dataSnapshot.getValue().equals("Driver Cancelled")) {
                         // 6. Driver ended dispatch
                         Log.d(DEBUG_ON_CONNECTED, "6. Driver ended dispatch");
-                        showToast("Dispatch ended by driver");
+                        toastBuilder("Dispatch ended by driver");
                         mDispatchState = State.IDLE;
 
                         // 0 D. Dispatch ended from driver
@@ -708,7 +759,7 @@ public class MainActivity extends AppCompatActivity
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                showToast("Dispatch cancelled. There was a database error!");
+                toastBuilder("Dispatch cancelled. There was a database error!");
                 // 0 B. Dispatch cancelled from database error 5
                 Log.d(DEBUG_ON_CANCEL, "0 B. Dispatch cancelled from database error 5");
                 destroyDispatchRequest();
@@ -729,7 +780,7 @@ public class MainActivity extends AppCompatActivity
         // 1. Change dispatch state to "not requesting a dispatch"
         Log.d(DEBUG_ON_CANCEL, "1. Change dispatch state to \"not requesting a dispatch\"");
         if (mDispatchState != State.IDLE) {
-            showToast("Dispatch cancelled!");
+            toastBuilder("Dispatch cancelled!");
         }
 
         // 2. Show fab and hide dispatch request state views, enable action bar buttons

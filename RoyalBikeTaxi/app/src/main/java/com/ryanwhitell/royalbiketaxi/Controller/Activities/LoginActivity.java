@@ -1,4 +1,4 @@
-package com.ryanwhitell.royalbiketaxi.Controller.Activities;
+package com.ryanwhitell.royalbiketaxi.controller.activities;
 
 import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
@@ -13,7 +13,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.ryanwhitell.royalbiketaxi.R;
-import com.ryanwhitell.royalbiketaxi.Controller.Models.Driver;
+import com.ryanwhitell.royalbiketaxi.controller.models.Driver;
 
 import java.util.ArrayList;
 import java.util.Map;
