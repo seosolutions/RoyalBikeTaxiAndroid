@@ -1,4 +1,4 @@
-package com.ryanwhitell.royalbiketaxi.Controller.View;
+package com.ryanwhitell.royalbiketaxi.Controller.Activities;
 
 import android.Manifest;
 import android.content.DialogInterface;
@@ -48,7 +48,7 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
-import com.ryanwhitell.royalbiketaxi.Controller.Model.DriverLocation;
+import com.ryanwhitell.royalbiketaxi.Controller.Models.DriverLocation;
 import com.ryanwhitell.royalbiketaxi.R;
 
 import java.util.ArrayList;

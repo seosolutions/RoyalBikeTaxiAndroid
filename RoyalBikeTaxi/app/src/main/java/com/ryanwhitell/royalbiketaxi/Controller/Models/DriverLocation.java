@@ -1,4 +1,4 @@
-package com.ryanwhitell.royalbiketaxi.Controller.Model;
+package com.ryanwhitell.royalbiketaxi.Controller.Models;
 
 import com.google.android.gms.maps.model.LatLng;
 
