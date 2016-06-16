@@ -202,26 +202,32 @@ public class MainActivity extends AppCompatActivity
         // 6. onStart()
         Log.d(DEBUG_ACTIVITY_LC, "6. onStart()");
 
-        // 7. listen for dispatch request
-        Log.d(DEBUG_ACTIVITY_LC, "7. listen for dispatch request");
-        mListenerUserDispatchRequest = mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                driverHandshake(dataSnapshot);
-            }
+        if (mListenerUserDispatchRequest == null) {
+            // 7. listen for dispatch request
+            Log.d(DEBUG_ACTIVITY_LC, "7. listen for dispatch request");
+            mListenerUserDispatchRequest = mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
+                @Override
+                public void onDataChange(DataSnapshot dataSnapshot) {
+                    driverHandshake(dataSnapshot);
+                }
 
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-                toastBuilder("Dispatch cancelled. There was a database error!");
-                // 0. Dispatch cancelled from database error 1
-                Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 1");
-                destroyDispatchRequest();
-            }
-        });
+                @Override
+                public void onCancelled(DatabaseError databaseError) {
+                    toastBuilder("Dispatch cancelled. There was a database error!");
+                    // 0. Dispatch cancelled from database error 1
+                    Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from database error 1");
+                    destroyDispatchRequest();
+                }
+            });
+        }
 
-        // 8. Connect to the api client
-        Log.d(DEBUG_ACTIVITY_LC, "8. Connect to the api client");
-        mGoogleApiClient.connect();
+
+        if (!mGoogleApiClient.isConnected()) {
+            // 8. Connect to the api client
+            Log.d(DEBUG_ACTIVITY_LC, "8. Connect to the api client");
+            mGoogleApiClient.connect();
+        }
+
     }
 
     @Override
@@ -269,12 +275,14 @@ public class MainActivity extends AppCompatActivity
         if (mFirebaseUserDispatchRequest != null) {
             if (mListenerUserDispatchRequest != null) {
                 mFirebaseUserDispatchRequest.removeEventListener(mListenerUserDispatchRequest);
+                mListenerUserDispatchRequest = null;
             }
         }
 
-        // 15. Disconnect the api client
-        Log.d(DEBUG_ACTIVITY_LC, "15. Disconnect the api client");
+
         if (mGoogleApiClient.isConnected()) {
+            // 15. Disconnect the api client
+            Log.d(DEBUG_ACTIVITY_LC, "15. Disconnect the api client");
             mGoogleApiClient.disconnect();
         }
 
