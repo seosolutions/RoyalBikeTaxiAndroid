@@ -1,4 +1,4 @@
-package com.ryanwhitell.royalbiketaxi.controller.activities;
+package com.ryanwhitell.royalbiketaxi.main.activities;
 
 import android.Manifest;
 import android.content.DialogInterface;

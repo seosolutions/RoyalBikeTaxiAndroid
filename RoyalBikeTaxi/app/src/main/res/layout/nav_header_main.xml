@@ -16,7 +16,7 @@
         android:contentDescription="Bike Image"
         android:layout_width="70dp"
         android:layout_height="70dp"
-        android:src="@drawable/ic_directions_bike_white_24px"
+        android:src="@drawable/ic_directions_bike_white"
         android:id="@+id/imageView"
         android:onClick="signInAsDriver"/>
 
@@ -31,6 +31,4 @@
         android:layout_height="wrap_content"
         android:text="912-341-3944"
         android:id="@+id/textView" />
-
-
 </LinearLayout>

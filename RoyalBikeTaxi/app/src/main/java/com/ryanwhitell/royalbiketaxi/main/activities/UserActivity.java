@@ -1,4 +1,4 @@
-package com.ryanwhitell.royalbiketaxi.controller.activities;
+package com.ryanwhitell.royalbiketaxi.main.activities;
 
 import android.Manifest;
 import android.content.DialogInterface;
@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -48,7 +49,7 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
-import com.ryanwhitell.royalbiketaxi.controller.models.DriverLocation;
+import com.ryanwhitell.royalbiketaxi.main.models.DriverLocation;
 import com.ryanwhitell.royalbiketaxi.R;
 
 import java.util.ArrayList;
@@ -57,9 +58,12 @@ import java.util.Map;
 
 import android.os.Handler;
 
-public class MainActivity extends AppCompatActivity
-        implements NavigationView.OnNavigationItemSelectedListener, OnMapReadyCallback,
-        GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
+public class UserActivity extends AppCompatActivity
+        implements NavigationView.OnNavigationItemSelectedListener,
+        OnMapReadyCallback,
+        GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener,
+        LocationListener {
 
     // TODO: Check that the app can use the google api, location, maps, and is connected to the internet
     // TODO: More lifecycle things, backround services, clean unnecessary code
@@ -68,7 +72,7 @@ public class MainActivity extends AppCompatActivity
     // Debugging
     private final String DEBUG_REQUEST_DISPATCH = "RequestDispatch";
     private final String DEBUG_DRIVER_LOCATIONS = "RequestLocations";
-    private final String DEBUG_ON_CONNECTED = "Connected";
+    private final String DEBUG_ON_CONNECTED = "ConnectedToDispatch";
     private final String DEBUG_ON_CANCEL = "Cancelled";
     private final String DEBUG_ACTIVITY_LC = "Lifecycle";
 
@@ -103,7 +107,6 @@ public class MainActivity extends AppCompatActivity
     public ArrayList<DriverLocation> mDriverLocations;
 
     // Navigation
-    private Button mCancelDispatch;
     private FloatingActionButton mFab;
     private Boolean mActionBarButtonState;
 
@@ -111,6 +114,7 @@ public class MainActivity extends AppCompatActivity
     private int mNumberOfDrivers;
     private int mIndex;
     private Handler mHandler;
+    private Runnable mRunnableWaitForResponse;
 
     /******* ACTIVITY LIFECYCLE *******/
     @Override
@@ -152,6 +156,8 @@ public class MainActivity extends AppCompatActivity
 
         mDriverLocations = new ArrayList<>();
 
+        // 5. Build Api Client
+        Log.d(DEBUG_ACTIVITY_LC, "5. Build Api Client");
         mGoogleApiClient = new GoogleApiClient.Builder(this)
                 .addApi(LocationServices.API)
                 .addConnectionCallbacks(this)
@@ -159,13 +165,10 @@ public class MainActivity extends AppCompatActivity
                 .build();
 
 
-        /******* Initialize Navigation *******/
-        // 5. Initialize Navigation
-        Log.d(DEBUG_ACTIVITY_LC, "5. Initialize Navigation");
-        mCancelDispatch = (Button) findViewById(R.id.cancel__dispatch_button);
-        assert mCancelDispatch != null;
-        mCancelDispatch.setVisibility(View.GONE);
 
+        /******* Initialize Navigation *******/
+        // 6. Initialize Navigation
+        Log.d(DEBUG_ACTIVITY_LC, "6. Initialize Navigation");
         mActivityWheel = (ProgressBar) findViewById(R.id.progress_bar);
         assert mActivityWheel != null;
         mActivityWheel.setVisibility(View.GONE);
@@ -199,12 +202,18 @@ public class MainActivity extends AppCompatActivity
     protected void onStart() {
         super.onStart();
 
-        // 6. onStart()
-        Log.d(DEBUG_ACTIVITY_LC, "6. onStart()");
+        // 7. onStart()
+        Log.d(DEBUG_ACTIVITY_LC, "7. onStart()");
+
+        if (!mGoogleApiClient.isConnected()) {
+            // 8. Connect to the api client
+            Log.d(DEBUG_ACTIVITY_LC, "8. Connect to the api client");
+            mGoogleApiClient.connect();
+        }
 
         if (mListenerUserDispatchRequest == null) {
-            // 7. listen for dispatch request
-            Log.d(DEBUG_ACTIVITY_LC, "7. listen for dispatch request");
+            // 9. listen for dispatch request
+            Log.d(DEBUG_ACTIVITY_LC, "9. listen for dispatch request");
             mListenerUserDispatchRequest = mFirebaseUserDispatchRequest.addValueEventListener(new ValueEventListener() {
                 @Override
                 public void onDataChange(DataSnapshot dataSnapshot) {
@@ -221,20 +230,6 @@ public class MainActivity extends AppCompatActivity
             });
         }
 
-
-        if (!mGoogleApiClient.isConnected()) {
-            // 8. Connect to the api client
-            Log.d(DEBUG_ACTIVITY_LC, "8. Connect to the api client");
-            mGoogleApiClient.connect();
-        }
-
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // 9. onResume()
-        Log.d(DEBUG_ACTIVITY_LC, "9. onResume()");
     }
 
     @Override
@@ -244,14 +239,11 @@ public class MainActivity extends AppCompatActivity
         // 10. onPause()
         Log.d(DEBUG_ACTIVITY_LC, "10. onPause()");
 
-        // 11. Destroy dispatch request if not IDLE
-        Log.d(DEBUG_ACTIVITY_LC, "11. Destroy dispatch request if not IDLE");
         if (mDispatchState != State.IDLE) {
-            // Destroy any dispatch requests
-            // 0. Dispatch cancelled from onDestroy()
-            Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from onDestroy()");
-            // 11A. Destroying dispatch request
-            Log.d(DEBUG_ACTIVITY_LC, "11A. Destroying dispatch request");
+            // 0. Dispatch cancelled from onPause()
+            Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from onPause()");
+            // Destroying dispatch request from onPause()!
+            Log.d(DEBUG_ACTIVITY_LC, "Destroying dispatch request from onPause()!");
             destroyDispatchRequest();
         }
 
@@ -261,38 +253,24 @@ public class MainActivity extends AppCompatActivity
     protected void onStop() {
         super.onStop();
 
-        // 12. onStop()
-        Log.d(DEBUG_ACTIVITY_LC, "12. onStop()");
+        // 11. onStop()
+        Log.d(DEBUG_ACTIVITY_LC, "11. onStop()");
 
-        // 13. Clear map
-        Log.d(DEBUG_ACTIVITY_LC, "13. Clear map");
-        if (mMap != null) {
-            mMap.clear();
-        }
-
-        // 14. Remove user dispatch request listener
-        Log.d(DEBUG_ACTIVITY_LC, "14. Remove user dispatch request listener");
         if (mFirebaseUserDispatchRequest != null) {
             if (mListenerUserDispatchRequest != null) {
+                // 12. Remove user dispatch request listener
+                Log.d(DEBUG_ACTIVITY_LC, "12. Remove user dispatch request listener");
                 mFirebaseUserDispatchRequest.removeEventListener(mListenerUserDispatchRequest);
                 mListenerUserDispatchRequest = null;
             }
         }
 
-
         if (mGoogleApiClient.isConnected()) {
-            // 15. Disconnect the api client
-            Log.d(DEBUG_ACTIVITY_LC, "15. Disconnect the api client");
+            // 13. Disconnect the api client
+            Log.d(DEBUG_ACTIVITY_LC, "13. Disconnect the api client");
             mGoogleApiClient.disconnect();
         }
 
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        // 16. onDestroy()
-        Log.d(DEBUG_ACTIVITY_LC, "16. onDestroy()");
     }
 
 
@@ -418,13 +396,14 @@ public class MainActivity extends AppCompatActivity
 
         if (mActionBarButtonState) {
             if (id == R.id.nav_book) {
-                Log.d("NAV", "nav button click");
+                startActivity(new Intent(this, BookTourActivity.class));
             } else if (id == R.id.nav_info) {
-                Log.d("NAV", "nav button click");
+                startActivity(new Intent(this, TourInformationActivity.class));
             } else if (id == R.id.nav_help) {
-                Log.d("NAV", "nav button click");
+                startActivity(new Intent(this, HelpAndRatesActivity.class));
             } else if (id == R.id.nav_call) {
-                Log.d("NAV", "nav button click");
+                Intent dialNumberIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + "1234567890"));
+                startActivity(dialNumberIntent);
             }
         }
 
@@ -505,7 +484,6 @@ public class MainActivity extends AppCompatActivity
     public void confirmDispatch() {
         // 1. Hide fab and show dispatch request state views, prevent device sleep, disable action bar buttons
         Log.d(DEBUG_REQUEST_DISPATCH, "1. Hide fab and show dispatch request state views, prevent device sleep");
-        mCancelDispatch.setVisibility(View.VISIBLE);
         mActivityWheel.setVisibility(View.VISIBLE);
         mFab.setVisibility(View.GONE);
         //getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -590,37 +568,39 @@ public class MainActivity extends AppCompatActivity
             mNumberOfDrivers = mDriverLocations.size();
             mIndex = 0;
 
-            Runnable waitForResponse = new Runnable() {
+            mRunnableWaitForResponse = new Runnable() {
                 @Override
                 public void run() {
-                    if ((mIndex < mNumberOfDrivers-1)) {
-                        // 12 B. Check to see if the driver has responded, else try the next on the list
-                        Log.d(DEBUG_REQUEST_DISPATCH, "12 B. Check to see if the driver has responded, else try the next on the list");
+                    if (mDispatchState != State.IDLE) {
+                        if ((mIndex < mNumberOfDrivers-1)) {
+                            // 12 B. Check to see if the driver has responded, else try the next on the list
+                            Log.d(DEBUG_REQUEST_DISPATCH, "12 B. Check to see if the driver has responded, else try the next on the list");
 
-                        if (mDispatchState == State.CONNECTED) {
-                            // 13. Connected to driver, quit runnable, track driver
-                            Log.d(DEBUG_REQUEST_DISPATCH, "13. Connected to driver, quit runnable");
-                            toastBuilder("Connected!");
-                            onConnectedToDriver();
-                        } else if (mDispatchState == State.SEARCHING) {
-                            // 12 C1. Driver has not responded, request next closest driver
-                            Log.d(DEBUG_REQUEST_DISPATCH, "12 C1. Driver has not responded, request next closest driver");
-                            toastBuilder("Driver declined. Trying next closest driver...");
-                            mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
-                            mIndex++;
-                            mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).getName()).child("Dispatch Request").setValue(mDispatchRequestKey);
-                            mHandler.postDelayed(this, 10000);
-                        }
-                    } else {
-                        if (mDispatchState == State.SEARCHING){
-                            // 12 C2. No drivers are currently available
-                            Log.d(DEBUG_REQUEST_DISPATCH, "12 C2. No drivers are currently available");
-                            mDispatchState = State.IDLE;
-                            alertPicker(3);
-                            mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
-                            // 0. Dispatch ended from unresponsive drivers
-                            Log.d(DEBUG_ON_CANCEL, "0. Dispatch ended from unresponsive drivers");
-                            destroyDispatchRequest();
+                            if (mDispatchState == State.CONNECTED) {
+                                // 13. Connected to driver, quit runnable, track driver
+                                Log.d(DEBUG_REQUEST_DISPATCH, "13. Connected to driver, quit runnable");
+                                toastBuilder("Connected!");
+                                onConnectedToDriver();
+                            } else if (mDispatchState == State.SEARCHING) {
+                                // 12 C1. Driver has not responded, request next closest driver
+                                Log.d(DEBUG_REQUEST_DISPATCH, "12 C1. Driver has not responded, request next closest driver");
+                                toastBuilder("Driver declined. Trying next closest driver...");
+                                mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
+                                mIndex++;
+                                mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).getName()).child("Dispatch Request").setValue(mDispatchRequestKey);
+                                mHandler.postDelayed(this, 10000);
+                            }
+                        } else {
+                            if (mDispatchState == State.SEARCHING){
+                                // 12 C2. No drivers are currently available
+                                Log.d(DEBUG_REQUEST_DISPATCH, "12 C2. No drivers are currently available");
+                                mDispatchState = State.IDLE;
+                                alertPicker(3);
+                                mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
+                                // 0. Dispatch ended from unresponsive drivers
+                                Log.d(DEBUG_ON_CANCEL, "0. Dispatch ended from unresponsive drivers");
+                                destroyDispatchRequest();
+                            }
                         }
                     }
                 }
@@ -630,7 +610,7 @@ public class MainActivity extends AppCompatActivity
             Log.d(DEBUG_REQUEST_DISPATCH, "11. Request nearest available driver and provide 10 seconds for response");
             toastBuilder("Contacting nearest driver...");
             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).getName()).child("Dispatch Request").setValue(mDispatchRequestKey);
-            mHandler.postDelayed(waitForResponse, 10000);
+            mHandler.postDelayed(mRunnableWaitForResponse, 10000);
         }
     }
 
@@ -692,7 +672,6 @@ public class MainActivity extends AppCompatActivity
 
         // 1. Hide dispatch request buttons
         Log.d(DEBUG_ON_CONNECTED, "1. Hide dispatch request buttons");
-        mCancelDispatch.setVisibility(View.GONE);
         mActivityWheel.setVisibility(View.GONE);
 
         // 2. Clear map
@@ -776,13 +755,6 @@ public class MainActivity extends AppCompatActivity
 
     }
 
-    // Cancel a dispatch
-    public void cancelDispatch(View view) {
-        // 0 A. Dispatch cancelled from cancel button click
-        Log.d(DEBUG_ON_CANCEL, "0 A. Dispatch cancelled from cancel button click");
-        destroyDispatchRequest();
-    }
-
     public void destroyDispatchRequest() {
 
         // 1. Change dispatch state to "not requesting a dispatch"
@@ -793,7 +765,6 @@ public class MainActivity extends AppCompatActivity
 
         // 2. Show fab and hide dispatch request state views, enable action bar buttons
         Log.d(DEBUG_ON_CANCEL, "2. Show fab and hide dispatch request state views, enable action bar buttons");
-        mCancelDispatch.setVisibility(View.GONE);
         mActivityWheel.setVisibility(View.GONE);
         mFab.setVisibility(View.VISIBLE);
         mActionBarButtonState = true;
@@ -833,6 +804,14 @@ public class MainActivity extends AppCompatActivity
             // 4 E. Remove track driver listener
             Log.d(DEBUG_ON_CANCEL, "4 E. Remove track driver listener");
             mFirebaseUserDispatchRequest.removeEventListener(mListenerTrackDriver);
+        }
+
+        if (mHandler != null) {
+            mHandler = null;
+        }
+
+        if (mRunnableWaitForResponse != null) {
+            mRunnableWaitForResponse = null;
         }
 
         // 5. Change state to idle
@@ -897,10 +876,22 @@ public class MainActivity extends AppCompatActivity
             }
         });
 
+        mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+            @Override
+            public void onInfoWindowClick(Marker marker) {
+                String phoneNumber = marker.getSnippet();
+                if (phoneNumber != null) {
+                    Intent dialNumberIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phoneNumber));
+                    startActivity(dialNumberIntent);
+                }
+            }
+        });
+
         LatLng savannah = new LatLng(32.072219, -81.0933537);
         CameraPosition cp = new CameraPosition(savannah, 14.9f, 0, 17.5f);
         mMap.moveCamera(CameraUpdateFactory.newCameraPosition(cp));
     }
+
 
 
     /******* LOCATION SERVICES *******/

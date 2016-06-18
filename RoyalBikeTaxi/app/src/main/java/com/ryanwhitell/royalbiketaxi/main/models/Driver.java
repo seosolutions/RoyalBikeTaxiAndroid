@@ -1,4 +1,4 @@
-package com.ryanwhitell.royalbiketaxi.controller.models;
+package com.ryanwhitell.royalbiketaxi.main.models;
 
 /**
  * Created by Ryan on 5/25/2016.

@@ -1,11 +1,11 @@
-package com.ryanwhitell.royalbiketaxi.controller.models;
+package com.ryanwhitell.royalbiketaxi.main.models;
 
 import com.google.android.gms.maps.model.LatLng;
 
 /**
  * Created by Ryan on 6/2/2016.
  */
-public class DriverLocation implements Comparable{
+public class DriverLocation implements Comparable {
     public String name;
     public LatLng location;
     public Double distance;
