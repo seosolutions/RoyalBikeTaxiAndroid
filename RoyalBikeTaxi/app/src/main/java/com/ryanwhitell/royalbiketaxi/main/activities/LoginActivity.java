@@ -14,6 +14,7 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.ryanwhitell.royalbiketaxi.R;
 import com.ryanwhitell.royalbiketaxi.main.models.Driver;
+import com.ryanwhitell.royalbiketaxi.main.services.DriverService;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -83,10 +84,11 @@ public class LoginActivity extends AppCompatActivity {
             if (checkName(name)) {
                 if (checkPassword(pass, name)) {
                     Intent intent = new Intent(this, DriverActivity.class);
-                    intent.putExtra("name", name);
+                    DriverService.sDriverName = name;
                     String number = getNumber(name);
-                    intent.putExtra("phoneNumber", number);
+                    DriverService.sDriverNumber = number;
                     startActivity(intent);
+                    this.finish();
                 } else {
                     Toast.makeText(getApplicationContext(), "Invalid password", Toast.LENGTH_LONG).show();
                 }

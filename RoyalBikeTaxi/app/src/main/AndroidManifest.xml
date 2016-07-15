@@ -60,6 +60,7 @@
             android:windowSoftInputMode="adjustPan" />
         <activity android:name=".main.activities.TourInformationActivity" />
         <activity android:name=".main.activities.HelpAndRatesActivity"></activity>
+        <service android:name=".main.services.DriverService"/>
     </application>
 
 </manifest>

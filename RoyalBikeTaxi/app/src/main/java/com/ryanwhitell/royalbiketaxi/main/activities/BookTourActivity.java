@@ -39,7 +39,7 @@ public class BookTourActivity extends AppCompatActivity {
         assert toolbar != null;
         toolbar.setTitle("Book a Tour");
 
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
+        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab_request_dispatch);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {

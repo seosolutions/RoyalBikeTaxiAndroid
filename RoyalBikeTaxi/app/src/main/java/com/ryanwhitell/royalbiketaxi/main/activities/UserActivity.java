@@ -24,7 +24,6 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
@@ -66,7 +65,7 @@ public class UserActivity extends AppCompatActivity
         LocationListener {
 
     // TODO: Check that the app can use the google api, location, maps, and is connected to the internet
-    // TODO: More lifecycle things, backround services, clean unnecessary code
+    // TODO: More lifecycle things, backround services, clean unnecessary code, make pretty, constants
 
     /******* VARIABLES *******/
     // Debugging
@@ -107,7 +106,8 @@ public class UserActivity extends AppCompatActivity
     public ArrayList<DriverLocation> mDriverLocations;
 
     // Navigation
-    private FloatingActionButton mFab;
+    private FloatingActionButton mFabRequestDispatch;
+    private FloatingActionButton mFabCancelDispatch;
     private Boolean mActionBarButtonState;
 
     // Runnable, Handler
@@ -120,7 +120,7 @@ public class UserActivity extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_user);
 
         // 1. onCreate()
         Log.d(DEBUG_ACTIVITY_LC, "1. onCreate()");
@@ -176,12 +176,22 @@ public class UserActivity extends AppCompatActivity
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        mFab = (FloatingActionButton) findViewById(R.id.fab);
-        assert mFab != null;
-        mFab.setOnClickListener(new View.OnClickListener() {
+        mFabRequestDispatch = (FloatingActionButton) findViewById(R.id.fab_request_dispatch);
+        assert mFabRequestDispatch != null;
+        mFabRequestDispatch.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                onClickFab(view);
+                onClickFabRequestDispatch(view);
+            }
+        });
+
+        mFabCancelDispatch = (FloatingActionButton) findViewById(R.id.fab_cancel_dispatch);
+        assert mFabCancelDispatch != null;
+        mFabCancelDispatch.setVisibility(View.GONE);
+        mFabCancelDispatch.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                destroyDispatchRequest();
             }
         });
 
@@ -471,12 +481,13 @@ public class UserActivity extends AppCompatActivity
     }
 
     // Request a dispatch
-    public void onClickFab(View view){
+    public void onClickFabRequestDispatch(View view){
         if (mLocationMarker != null) {
             if (withinBounds()) {
                 alertPicker(1);
             } else {
-                alertPicker(2);
+                // TODO: Change back to 2
+                alertPicker(1);
             }
         }
     }
@@ -485,7 +496,9 @@ public class UserActivity extends AppCompatActivity
         // 1. Hide fab and show dispatch request state views, prevent device sleep, disable action bar buttons
         Log.d(DEBUG_REQUEST_DISPATCH, "1. Hide fab and show dispatch request state views, prevent device sleep");
         mActivityWheel.setVisibility(View.VISIBLE);
-        mFab.setVisibility(View.GONE);
+        mFabRequestDispatch.setVisibility(View.GONE);
+        mFabCancelDispatch.setVisibility(View.VISIBLE);
+        // TODO: Keep screen on
         //getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         mActionBarButtonState = false;
         toastBuilder("Locating drivers...");
@@ -766,7 +779,8 @@ public class UserActivity extends AppCompatActivity
         // 2. Show fab and hide dispatch request state views, enable action bar buttons
         Log.d(DEBUG_ON_CANCEL, "2. Show fab and hide dispatch request state views, enable action bar buttons");
         mActivityWheel.setVisibility(View.GONE);
-        mFab.setVisibility(View.VISIBLE);
+        mFabRequestDispatch.setVisibility(View.VISIBLE);
+        mFabCancelDispatch.setVisibility(View.GONE);
         mActionBarButtonState = true;
 
         // 3. Let the device sleep, clear driver marker
@@ -857,6 +871,7 @@ public class UserActivity extends AppCompatActivity
         } else {
             Intent intent = new Intent(this, LoginActivity.class);
             startActivity(intent);
+            this.finish();
         }
     }
 

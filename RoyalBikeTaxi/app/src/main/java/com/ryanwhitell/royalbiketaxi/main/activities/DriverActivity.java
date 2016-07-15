@@ -39,6 +39,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.ryanwhitell.royalbiketaxi.R;
+import com.ryanwhitell.royalbiketaxi.main.services.DriverService;
 
 import java.util.Map;
 
@@ -128,9 +129,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         /******** Initialize Driver Information *******/
         mDispatchState = State.AVAILABLE;
 
-        Intent intent = getIntent();
-        mName = intent.getStringExtra("name");
-        mNumber = intent.getStringExtra("phoneNumber");
+        mName = DriverService.sDriverName;
+        mNumber = DriverService.sDriverNumber;
 
 
         /******* Initialize Firebase *******/
@@ -158,7 +158,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         toolbar.setTitle("You are logged in as " + mName);
         setSupportActionBar(toolbar);
 
-        mRefreshFab = (FloatingActionButton) findViewById(R.id.fab);
+        mRefreshFab = (FloatingActionButton) findViewById(R.id.fab_request_dispatch);
         assert mRefreshFab != null;
         mRefreshFab.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -176,6 +176,12 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     @Override
     protected void onStart() {
         super.onStart();
+
+        if (DriverService.sIsActive) {
+            Intent startForegroundIntent = new Intent(DriverActivity.this, DriverService.class);
+            startForegroundIntent.setAction("Stop");
+            startService(startForegroundIntent);
+        }
 
         // onStart()
         Log.d(DEBUG_ACTIVITY_LC, "onStart()");
@@ -240,6 +246,12 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     @Override
     protected void onStop() {
         super.onStop();
+
+        if (!DriverService.sIsActive) {
+            Intent startForegroundIntent = new Intent(DriverActivity.this, DriverService.class);
+            startForegroundIntent.setAction("Start");
+            startService(startForegroundIntent);
+        }
 
         // onStop()
         Log.d(DEBUG_ACTIVITY_LC, "onStop()");
