@@ -14,6 +14,8 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -33,12 +35,14 @@ import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.StreetViewPanoramaCamera;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.ryanwhitell.royalbiketaxi.R;
+import com.ryanwhitell.royalbiketaxi.main.models.Driver;
 import com.ryanwhitell.royalbiketaxi.main.services.DriverService;
 
 import java.util.Map;
@@ -78,9 +82,10 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
     //Flow Control
     private enum State {
-        AVAILABLE, ON_DISPATCH
+        UNAVAILABLE, AVAILABLE, ON_DISPATCH
     }
     private State mDispatchState;
+    private String mAction;
 
     // Google Api - Location, Map
     private GoogleMap mMap;
@@ -91,6 +96,8 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     //Navigation
     private Button mEndButton;
     private FloatingActionButton mRefreshFab;
+    private MenuItem mLoginButton;
+    private MenuItem mLogoutButton;
 
 
     /******* ACTIVITY LIFECYCLE *******/
@@ -163,6 +170,7 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         mRefreshFab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                showToast("Refreshing driver locations");
                 requestDriverLocations();
             }
         });
@@ -176,6 +184,15 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
     @Override
     protected void onStart() {
         super.onStart();
+
+        Intent intent = getIntent();
+
+        if (intent.getAction() != null) {
+            mAction = intent.getAction();
+        } else {
+            mAction = "";
+        }
+
 
         if (DriverService.sIsActive) {
             Intent startForegroundIntent = new Intent(DriverActivity.this, DriverService.class);
@@ -191,22 +208,25 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         mMyDispatchRequestListener = mFirebaseAvailableDrivers.child(mName).child("Dispatch Request").addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                if (dataSnapshot.getValue() != null) {
-                    if (dataSnapshot.getValue().equals("Connected")) {
-                        // 3. User has confirmed and connected
-                        Log.d(DEBUG_DISPATCH_REQUEST, "3. User has confirmed and connected");
-                        connectedToUser();
+                if (mDispatchState == State.AVAILABLE) {
+                    if (dataSnapshot.getValue() != null) {
+                        if (dataSnapshot.getValue().equals("Connected")) {
+                            // 3. User has confirmed and connected
+                            Log.d(DEBUG_DISPATCH_REQUEST, "3. User has confirmed and connected");
+                            connectedToUser();
+
+                        } else if (!mAction.equals("Connect to User")){
+                            // 1. Incoming dispatch request
+                            Log.d(DEBUG_DISPATCH_REQUEST, "1. Incoming dispatch request");
+                            mDispatchRequestKey = dataSnapshot.getValue().toString();
+                            mIncomingDispatchAlertInstance = mIncomingDispatchAlert.create();
+                            mIncomingDispatchAlertInstance.show();
+                        }
                     } else {
-                        // 1. Incoming dispatch request
-                        Log.d(DEBUG_DISPATCH_REQUEST, "1. Incoming dispatch request");
-                        mDispatchRequestKey = dataSnapshot.getValue().toString();
-                        mIncomingDispatchAlertInstance = mIncomingDispatchAlert.create();
-                        mIncomingDispatchAlertInstance.show();
-                    }
-                } else {
-                    if (mIncomingDispatchAlertInstance != null) {
-                        mIncomingDispatchAlertInstance.dismiss();
-                        updateMyMarker(mLastKnownLocation);
+                        if (mIncomingDispatchAlertInstance != null) {
+                            mIncomingDispatchAlertInstance.dismiss();
+                            updateMyMarker(mLastKnownLocation);
+                        }
                     }
                 }
             }
@@ -241,17 +261,16 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         // 3. Set phoneNumber in database
         Log.d(DEBUG_SIGN_IN, "3. Set phoneNumber in database");
         mFirebaseAvailableDrivers.child(mName).child("phoneNumber").setValue(mNumber);
+
+        if (mAction.equals("Connect to User")) {
+            mDispatchRequestKey = DriverService.sDispatchRequestKey;
+            mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("Connected").setValue(mName);
+        }
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-
-        if (!DriverService.sIsActive) {
-            Intent startForegroundIntent = new Intent(DriverActivity.this, DriverService.class);
-            startForegroundIntent.setAction("Start");
-            startService(startForegroundIntent);
-        }
 
         // onStop()
         Log.d(DEBUG_ACTIVITY_LC, "onStop()");
@@ -264,9 +283,49 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         Log.d(DEBUG_ON_CANCEL, "0. Dispatch cancelled from onStop()");
         disconnectFromUser();
 
-        // Remove self from database, disconnect from the Api Client if connected
-        mFirebaseAvailableDrivers.child(mName).removeValue();
+        if ((!DriverService.sIsActive) && (mDispatchState == State.AVAILABLE)) {
+            Intent startForegroundIntent = new Intent(DriverActivity.this, DriverService.class);
+            startForegroundIntent.setAction("Start");
+            startService(startForegroundIntent);
+        }
+
         mGoogleApiClient.disconnect();
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+
+        getMenuInflater().inflate(R.menu.driver, menu);
+
+        mLogoutButton = menu.findItem(R.id.action_logout);
+        mLoginButton = menu.findItem(R.id.action_login);
+
+        mLogoutButton.setVisible(false);
+        mLoginButton.setVisible(false);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.action_logout) {
+            showToast("You are now offline");
+            mDispatchState = State.UNAVAILABLE;
+            mLoginButton.setVisible(true);
+            mLogoutButton.setVisible(false);
+            mFirebaseAvailableDrivers.child(mName).removeValue();
+            return true;
+        } else if (id == R.id.action_login) {
+            showToast("You are now online");
+            mDispatchState = State.AVAILABLE;
+            mLoginButton.setVisible(false);
+            mLogoutButton.setVisible(true);
+            driverLocationRequestReceived();
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
     }
 
     /******* Alerts *******/
@@ -355,6 +414,9 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
 
     public void connectedToUser() {
 
+        // Reset mAction
+        mAction = "";
+
         // 4. Clear map
         Log.d(DEBUG_DISPATCH_REQUEST, "4. Clear map");
         mMap.clear();
@@ -365,20 +427,16 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         mRefreshFab.setVisibility(View.GONE);
         //getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        // 6. Update my marker
-        Log.d(DEBUG_DISPATCH_REQUEST, "6. Update my marker");
-        updateMyMarker(mLastKnownLocation);
-
-        // 7. Remove self from "Available Drivers," update information, set state to "On Dispatch"
-        Log.d(DEBUG_DISPATCH_REQUEST, "7. Remove self from \"Available Drivers,\" update information, set state to \"On Dispatch\"");
+        // 6. Remove self from "Available Drivers," update information, set state to "On Dispatch"
+        Log.d(DEBUG_DISPATCH_REQUEST, "6. Remove self from \"Available Drivers,\" update information, set state to \"On Dispatch\"");
         mFirebaseAvailableDrivers.child(mName).removeValue();
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("name").setValue(mName);
-        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("phoneNumber").setValue(mNumber);
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("name").setValue(DriverService.sDriverName);
+        mFirebaseUserDispatchRequest.child(mDispatchRequestKey).child("driver").child("phoneNumber").setValue(DriverService.sDriverNumber);
         mDispatchState = State.ON_DISPATCH;
         mGoogleApiClient.connect();
 
-        // 8. Initialize track user location listener
-        Log.d(DEBUG_DISPATCH_REQUEST, "8. Initialize track user location listener");
+        // 7. Initialize track user location listener
+        Log.d(DEBUG_DISPATCH_REQUEST, "7. Initialize track user location listener");
         mTrackUserListener = mFirebaseUserDispatchRequest.child(mDispatchRequestKey).addValueEventListener(new ValueEventListener() {
             @SuppressWarnings("unchecked")
             @Override
@@ -549,11 +607,16 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
         updateMyMarker(location);
 
         if (mDispatchState == State.AVAILABLE) {
-            // 9. Disconnect from the Api
-            Log.d(DEBUG_SIGN_IN, "9. Disconnect from the Api ");
+            // 9a. Disconnect from the Api
+            Log.d(DEBUG_SIGN_IN, "9a. Disconnect from the Api ");
             mGoogleApiClient.disconnect();
+            mLogoutButton.setVisible(true);
         } else if (mDispatchState == State.ON_DISPATCH) {
             trackDriverLocation(location);
+        } else {
+            // 9b. Disconnect from the Api
+            Log.d(DEBUG_SIGN_IN, "9b. Disconnect from the Api ");
+            mGoogleApiClient.disconnect();
         }
 
     }
@@ -574,7 +637,6 @@ public class DriverActivity extends AppCompatActivity implements OnMapReadyCallb
                 .setValue(location.getLongitude());
 
         updateMyMarker(location);
-
     }
 
     public void updateMyMarker(Location location) {

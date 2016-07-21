@@ -11,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.renderscript.RenderScript;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
@@ -23,9 +24,6 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -33,8 +31,7 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.ryanwhitell.royalbiketaxi.R;
 import com.ryanwhitell.royalbiketaxi.main.activities.DriverActivity;
-
-import java.util.Map;
+import com.ryanwhitell.royalbiketaxi.main.models.Driver;
 
 /**
  * Created by Ryan on 7/15/2016.
@@ -81,18 +78,34 @@ public class DriverService extends Service implements GoogleApiClient.Connection
 
         if (action.equals("Start") && (!sIsActive)) {
             onStartService();
-        } else if (action.equals("ACCEPT")) {
-            //onAcceptDispatchRequest();
+
+            Intent notificationIntent = new Intent(this, DriverActivity.class);
+            notificationIntent.setAction("Main");
+            notificationIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            PendingIntent pendingIntent = PendingIntent.getActivity(this,
+                    0,
+                    notificationIntent,
+                    0);
+
+            mNotification = new NotificationCompat.Builder(this)
+                    .setContentTitle("You are online as " + sDriverName)
+                    .setContentText("Currently awaiting a dispatch...")
+                    .setSmallIcon(R.drawable.ic_directions_bike_white)
+                    .setContentIntent(pendingIntent)
+                    .setOngoing(true).build();
+
+            startForeground(7, mNotification);
 
         } else if (action.equals("DECLINE")) {
-            //onDeclineDispatchRequest();
+            mFirebaseAvailableDrivers.child(sDriverName).child("Dispatch Request").removeValue();
+            makeNotification(1);
 
         } else if (action.equals("Stop") && (sIsActive)) {
-            Toast.makeText(this, "Foreground Service Stopped", Toast.LENGTH_LONG).show();
-            stopForeground(true);
             stopListening();
+            stopForeground(true);
             stopSelf();
             sIsActive = false;
+
         }
 
         return START_STICKY;
@@ -103,12 +116,10 @@ public class DriverService extends Service implements GoogleApiClient.Connection
         super.onDestroy();
         stopListening();
         sIsActive = false;
-        Toast.makeText(this, "Foreground Service Destroyed", Toast.LENGTH_LONG).show();
     }
 
     // Intent Control
     public void onStartService() {
-        Toast.makeText(this, "Foreground Service Started", Toast.LENGTH_LONG).show();
         sIsActive = true;
 
         //Google API CLIENT
@@ -118,24 +129,15 @@ public class DriverService extends Service implements GoogleApiClient.Connection
                 .addOnConnectionFailedListener(this)
                 .build();
 
-        //Context
-        mContext = this;
-
         //Firebase
         FirebaseDatabase firebaseDatabase = FirebaseDatabase.getInstance();
         mFirebaseAvailableDrivers = firebaseDatabase.getReference().child("Available Drivers");
         mFirebaseLocationRequest = firebaseDatabase.getReference("Location Request");
 
-        makeNotification();
-
         startListening();
     }
 
-    public void onStopService() {
-
-    }
-
-    public void makeNotification() {
+    public void makeNotification(int which) {
 
         mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
@@ -147,24 +149,46 @@ public class DriverService extends Service implements GoogleApiClient.Connection
                 notificationIntent,
                 0);
 
-        Intent yesIntent = new Intent(this, DriverService.class);
-        yesIntent.setAction("Yes");
-        PendingIntent pYesIntent = PendingIntent.getService(this, 0,
-                yesIntent, 0);
+        Intent acceptIntent = new Intent(getBaseContext(), DriverActivity.class);
+        acceptIntent.setAction("Connect to User");
+        acceptIntent.putExtra("Accepted Request", "Accepted");
+        acceptIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent pAcceptIntent = PendingIntent.getActivity(getBaseContext(),
+                0,
+                acceptIntent,
+                0);
 
-        Intent noIntent = new Intent(this, DriverService.class);
-        noIntent.setAction("No");
-        PendingIntent pNoIntent = PendingIntent.getService(this, 0,
-                noIntent, 0);
+        Intent declineIntent = new Intent(this, DriverService.class);
+        declineIntent.setAction("DECLINE");
+        PendingIntent pDeclineIntent = PendingIntent.getService(this, 0,
+                declineIntent, 0);
 
-        mNotification = new NotificationCompat.Builder(this)
-                .setContentTitle("You are online as " + sDriverName)
-                .setContentText("Currently awaiting a dispatch...")
-                .setSmallIcon(R.drawable.ic_directions_bike_white)
-                .setContentIntent(pendingIntent)
-                .setOngoing(true).build();
+        if (which == 1) {
+            mNotification = new NotificationCompat.Builder(this)
+                    .setContentTitle("You are online as " + sDriverName)
+                    .setContentText("Currently awaiting a dispatch...")
+                    .setSmallIcon(R.drawable.ic_directions_bike_white)
+                    .setContentIntent(pendingIntent)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .setOngoing(true).build();
 
-        startForeground(7, mNotification);
+            mNotificationManager.notify(7, mNotification);
+        } else if (which == 2) {
+            mNotification = new NotificationCompat.Builder(this)
+                    .setContentTitle("Incoming dispatch!")
+                    .setContentText("Please accept or decline")
+                    .setSmallIcon(R.drawable.ic_directions_bike_white)
+                    .setContentIntent(null)
+                    .setOngoing(true)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .addAction(R.drawable.ic_done_black_24dp,
+                            "ACCEPT", pAcceptIntent)
+                    .addAction(R.drawable.ic_clear_black_24dp, "DECLINE",
+                            pDeclineIntent).build();
+
+            mNotificationManager.notify(7, mNotification);
+        }
+
     }
 
     /******* FIREBASE *******/
@@ -174,49 +198,11 @@ public class DriverService extends Service implements GoogleApiClient.Connection
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 if (dataSnapshot.getValue() != null) {
-
-                    Intent acceptIntent = new Intent(mContext, DriverService.class);
-                    acceptIntent.setAction("ACCEPT");
-                    PendingIntent pAcceptIntent = PendingIntent.getService(mContext, 0,
-                            acceptIntent, 0);
-
-                    Intent declineIntent = new Intent(mContext, DriverService.class);
-                    declineIntent.setAction("DECLINE");
-                    PendingIntent pDeclineIntent = PendingIntent.getService(mContext, 0,
-                            declineIntent, 0);
-
-                    mNotification = new NotificationCompat.Builder(mContext)
-                            .setContentTitle("Incoming dispatch!")
-                            .setContentText("Please accept or decline")
-                            .setSmallIcon(R.drawable.ic_directions_bike_white)
-                            .setContentIntent(null)
-                            .setOngoing(true)
-                            .addAction(R.drawable.ic_done_black_24dp,
-                                    "ACCEPT", pAcceptIntent)
-                            .addAction(R.drawable.ic_clear_black_24dp, "DECLINE",
-                                    pDeclineIntent).build();
-
-                    mNotificationManager.notify(7, mNotification);
-
+                    makeNotification(2);
                     sDispatchRequestKey = dataSnapshot.getValue().toString();
 
                 } else {
-                    Intent notificationIntent = new Intent(mContext, DriverActivity.class);
-                    notificationIntent.setAction("Main");
-                    notificationIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    PendingIntent pendingIntent = PendingIntent.getActivity(mContext,
-                            0,
-                            notificationIntent,
-                            0);
-
-                    mNotification = new NotificationCompat.Builder(mContext)
-                            .setContentTitle("You are online as " + sDriverName)
-                            .setContentText("Currently awaiting a dispatch...")
-                            .setSmallIcon(R.drawable.ic_directions_bike_white)
-                            .setContentIntent(pendingIntent)
-                            .setOngoing(true).build();
-
-                    mNotificationManager.notify(7, mNotification);
+                    makeNotification(1);
                 }
             }
 
@@ -234,12 +220,16 @@ public class DriverService extends Service implements GoogleApiClient.Connection
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                //showToast("Could not handle location request. There was a database error!");
+
+                //TODO: HAndle
             }
         });
     }
 
     private void stopListening() {
+        mFirebaseAvailableDrivers.child(sDriverName).child("Dispatch Request").removeEventListener(mMyDispatchRequestListener);
+        mFirebaseLocationRequest.removeEventListener(mLocationRequestListener);
+        mGoogleApiClient.disconnect();
     }
 
 

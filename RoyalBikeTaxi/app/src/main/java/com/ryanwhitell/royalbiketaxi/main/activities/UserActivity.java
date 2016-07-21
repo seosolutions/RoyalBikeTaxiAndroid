@@ -165,7 +165,6 @@ public class UserActivity extends AppCompatActivity
                 .build();
 
 
-
         /******* Initialize Navigation *******/
         // 6. Initialize Navigation
         Log.d(DEBUG_ACTIVITY_LC, "6. Initialize Navigation");
@@ -601,7 +600,7 @@ public class UserActivity extends AppCompatActivity
                                 mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).name).child("Dispatch Request").removeValue();
                                 mIndex++;
                                 mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).getName()).child("Dispatch Request").setValue(mDispatchRequestKey);
-                                mHandler.postDelayed(this, 10000);
+                                mHandler.postDelayed(this, 150000);
                             }
                         } else {
                             if (mDispatchState == State.SEARCHING){
@@ -623,7 +622,7 @@ public class UserActivity extends AppCompatActivity
             Log.d(DEBUG_REQUEST_DISPATCH, "11. Request nearest available driver and provide 10 seconds for response");
             toastBuilder("Contacting nearest driver...");
             mFirebaseAvailableDrivers.child(mDriverLocations.get(mIndex).getName()).child("Dispatch Request").setValue(mDispatchRequestKey);
-            mHandler.postDelayed(mRunnableWaitForResponse, 10000);
+            mHandler.postDelayed(mRunnableWaitForResponse, 150000);
         }
     }
 
@@ -820,11 +819,9 @@ public class UserActivity extends AppCompatActivity
             mFirebaseUserDispatchRequest.removeEventListener(mListenerTrackDriver);
         }
 
-        if (mHandler != null) {
+        if ((mHandler != null) && (mRunnableWaitForResponse != null)) {
+            mHandler.removeCallbacks(mRunnableWaitForResponse);
             mHandler = null;
-        }
-
-        if (mRunnableWaitForResponse != null) {
             mRunnableWaitForResponse = null;
         }
 
