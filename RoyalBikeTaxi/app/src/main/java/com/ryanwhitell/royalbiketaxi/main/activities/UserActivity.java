@@ -64,7 +64,7 @@ public class UserActivity extends AppCompatActivity
         GoogleApiClient.OnConnectionFailedListener,
         LocationListener {
 
-    // TODO: Check that the app can use the google api, location, maps, and is connected to the internet
+    // TODO: Check that the app can use the google api, location, maps, and is connected to the internet on startup
     // TODO: More lifecycle things, backround services, clean unnecessary code, make pretty, constants
 
     /******* VARIABLES *******/
@@ -485,8 +485,8 @@ public class UserActivity extends AppCompatActivity
             if (withinBounds()) {
                 alertPicker(1);
             } else {
-                // TODO: Change back to 2
-                alertPicker(1);
+                // Change to 1 if testing outside the bounds of Savannah
+                alertPicker(2);
             }
         }
     }
@@ -903,7 +903,6 @@ public class UserActivity extends AppCompatActivity
         CameraPosition cp = new CameraPosition(savannah, 14.9f, 0, 17.5f);
         mMap.moveCamera(CameraUpdateFactory.newCameraPosition(cp));
     }
-
 
 
     /******* LOCATION SERVICES *******/
